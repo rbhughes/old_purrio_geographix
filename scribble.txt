@@ -8,3 +8,73 @@ python -m client
 # to use system clipboard in pycharm:
 create c:\users\bryan\.ideavimrc
 containing this line: set clipboard+=unnamed
+
+
+# this mess didn't work, but shows some async techniques:
+####################
+async def check_file(file_path, pattern):
+    async with aiofiles.open(file_path, "r") as f:
+        content = await f.read()
+        if re.search(pattern, content):
+            print(f"Match found in: {file_path}")
+
+async def search_directory(directory, pattern, concurrency_limit=10):
+    semaphore = asyncio.Semaphore(concurrency_limit)
+    tasks = []
+    dir_entries = os.scandir(directory)
+    for entry in dir_entries:
+        if entry.is_file():
+            file_path = os.path.join(directory, entry.name)
+            async with semaphore:
+                tasks.append(check_file(file_path, pattern))
+        elif entry.is_dir():
+            tasks.append(
+                search_directory(
+                    os.path.join(directory, entry.name), pattern, concurrency_limit
+                )
+            )
+    await asyncio.gather(*tasks)
+    dir_entries.close()
+
+if __name__ == "__main__":
+    print("LALUNCHED")
+    # asyncio.run(main())
+####################
+
+# this actually works
+# async def async_repo_last_mod(repo_path: str):
+#     """
+#     invoke
+#         x = asyncio.run(async_repo_last_mod("//scarab/ggx_projects/colorado_north"))
+#
+#     :param repo_path:
+#     :return:
+#     """
+#     last_mod = datetime(1970, 1, 1)
+#
+#     async def traverse(dir_path: str):
+#         nonlocal last_mod
+#         for f in os.listdir(dir_path):
+#             full_path = os.path.join(dir_path, f)
+#             stat = os.stat(full_path)
+#             if os.path.isdir(full_path):
+#                 await traverse(full_path)
+#             else:
+#                 if not re.match(r"gxdb\.db$|gxdb_production\.db$|gxdb\.log$", f):
+#                     mod_time = datetime.fromtimestamp(stat.st_mtime)
+#                     if mod_time > last_mod:
+#                         last_mod = mod_time
+#
+#     await traverse(repo_path)
+#     return {"async_repo_mod": last_mod.strftime("%Y-%m-%d %H:%M:%S")}
+
+
+# removed from dir_stats
+# def sizeof_fmt(num, suffix="B"):
+#     """doc"""
+#     num = int(num)
+#     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+#         if abs(num) < 1024.0:
+#             return f"{num:3.1f}{unit}{suffix}"
+#         num /= 1024.0
+#     return f"{num:.1f}Y{suffix}"

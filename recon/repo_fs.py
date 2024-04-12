@@ -4,19 +4,10 @@ from subprocess import run
 from common.util import hostname, hashify
 import re
 from datetime import datetime
+from common.util import normalize_path
+from common.sqlanywhere import make_conn_params
 
 DUPATH = "bin/du64.exe"
-#
-#
-# print(hostname())
-
-
-def dir_exists(fs_path: str):
-    return os.path.isdir(fs_path)
-
-
-def normalize_path(fs_path: str):
-    return fs_path.replace("\\", "/")
 
 
 def is_ggx_project(maybe: str):
@@ -48,36 +39,6 @@ def glob_repos(recon_root: str, ggx_host=f"GGX_{hostname().upper()}"):
     return repo_list
 
 
-def make_conn_params(repo_path: str, host: str):
-    """doc"""
-    ggx_host = host or "localhost"
-    fs_path = normalize_path(repo_path)
-    name = fs_path.split("/")[-1]
-    home = fs_path.split("/")[-2]
-
-    params = {
-        "driver": os.environ.get("SQLANY_DRIVER"),
-        "uid": "dba",
-        "pwd": "sql",
-        "host": ggx_host,
-        "dbf": normalize_path(os.path.join(fs_path, "gxdb.db")),
-        "dbn": name.replace(" ", "_") + "-" + home.replace(" ", "_"),
-        "server": "GGX_" + ggx_host.upper(),
-        "astart": "YES",
-    }
-    return params
-
-
-# def sizeof_fmt(num, suffix="B"):
-#     """doc"""
-#     num = int(num)
-#     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
-#         if abs(num) < 1024.0:
-#             return f"{num:3.1f}{unit}{suffix}"
-#         num /= 1024.0
-#     return f"{num:.1f}Y{suffix}"
-
-
 def dir_stats(repo):
     """https://learn.microsoft.com/en-us/sysinternals/downloads/du"""
     fs_path = repo.get("fs_path")
@@ -96,37 +57,13 @@ def dir_stats(repo):
             right = pair[1].replace("bytes", "").replace(",", "").strip()
             if left == "Size":
                 meta["bytes"] = int(right)
-                # right = sizeof_fmt(right)
-                # meta[left.lower()] = right
-                # meta["human_size"] = right
             elif left != "Size on disk":
                 meta[left.lower()] = int(right)
-    # return {"inventory": meta}
     return meta
 
 
-# async def repo_last_mod(repo_path: str):
-#     last_mod = datetime(1970, 1, 1)
-#
-#     async def traverse(dir_path: str):
-#         nonlocal last_mod
-#         for f in os.listdir(dir_path):
-#             full_path = os.path.join(dir_path, f)
-#             stat = os.stat(full_path)
-#             if os.path.isdir(full_path):
-#                 await traverse(full_path)
-#             else:
-#                 if not re.match(r"gxdb\.db$|gxdb_production\.db$|gxdb\.log$", f):
-#                     if stat.st_mtime >= last_mod.timestamp():
-#                         last_mod = datetime.fromtimestamp(stat.st_mtime)
-#
-#     await traverse(repo_path)
-#     return {"repo_mod": last_mod.strftime("%Y-%m-%d %H:%M:%S")}
-
-
-def repo_last_mod(repo: dict):
+def repo_mod(repo: dict):
     last_mod = datetime(1970, 1, 1)
-    print("=======================", last_mod)
 
     def traverse(dir_path: str):
         nonlocal last_mod
@@ -137,7 +74,8 @@ def repo_last_mod(repo: dict):
                 if os.path.isdir(full_path):
                     traverse(full_path)
                 else:
-                    if not re.match(r"gxdb\.db$|gxdb_production\.db$|gxdb\.log$", f):
+                    gxdb_matcher = r"gxdb\.db$|gxdb_production\.db$|gxdb\.log$"
+                    if not re.match(gxdb_matcher, f):
                         mod_time = datetime.fromtimestamp(stat.st_mtime)
                         if mod_time > last_mod:
                             last_mod = mod_time

@@ -1,20 +1,8 @@
 from pprint import pp
-from recon.filesystem import (
-    dir_exists,
-    normalize_path,
-    glob_repos,
-    dir_stats,
-    repo_last_mod,
-)
-from recon.db_stats import well_counts
+from recon.repo_fs import glob_repos, dir_stats, repo_mod
+from recon.repo_db import well_counts, hull_outline
+from common.util import dir_exists, normalize_path
 from recon.epsg import epsg_codes
-from common.util import merge_nested_dict
-
-
-async def process_repo(repo):
-    for func in [well_counts, epsg_codes, dir_stats, repo_last_mod]:
-        md = await func(repo)
-        repo.update(md)
 
 
 def repo_recon(body):
@@ -33,7 +21,13 @@ def repo_recon(body):
     # return {"one": 111, "two": "asdfasdf"}
 
     for repo in repos:
-        for func in [well_counts, epsg_codes, dir_stats, repo_last_mod]:
+        for func in [
+            well_counts,
+            epsg_codes,
+            dir_stats,
+            repo_mod,
+            hull_outline,
+        ]:
             md = func(repo)
             repo.update(md)
 
@@ -52,7 +46,6 @@ def repo_recon(body):
 #
 # repo_recon(body)
 
-# TODO: add async for repo_last_mod
 """
 import asyncio
 

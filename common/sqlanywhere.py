@@ -1,7 +1,9 @@
 from typing import List, Dict
 import re
 import pyodbc
+import os
 from retry import retry
+from common.util import normalize_path
 
 # from .logger import basic_log
 
@@ -68,3 +70,23 @@ def db_exec(conn: Dict, sql: List[str] or str):
             cursor.close()
         if connection:
             connection.close()
+
+
+def make_conn_params(repo_path: str, host: str):
+    """doc"""
+    ggx_host = host or "localhost"
+    fs_path = normalize_path(repo_path)
+    name = fs_path.split("/")[-1]
+    home = fs_path.split("/")[-2]
+
+    params = {
+        "driver": os.environ.get("SQLANY_DRIVER"),
+        "uid": "dba",
+        "pwd": "sql",
+        "host": ggx_host,
+        "dbf": normalize_path(os.path.join(fs_path, "gxdb.db")),
+        "dbn": name.replace(" ", "_") + "-" + home.replace(" ", "_"),
+        "server": "GGX_" + ggx_host.upper(),
+        "astart": "YES",
+    }
+    return params

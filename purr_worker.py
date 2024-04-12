@@ -85,7 +85,16 @@ class PurrWorker:
             case "recon":
                 print("################ recon #################")
                 res = repo_recon(body)
-                pp(res)
+
+                data, count = self.supabase.table("repo").upsert(res).execute()
+                print("------------------------------------------------")
+                print(data)
+                print(count)
+                print("------------------------------------------------")
+
+                # for r in res:
+                #     pp(r)
+                #     print("------------------------------------------------")
                 # __ returns list of repos
                 # __ upserts repos
                 # __ send message
