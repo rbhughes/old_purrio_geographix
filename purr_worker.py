@@ -83,12 +83,12 @@ class PurrWorker:
             case "batcher":
                 print("BATCHER")
             case "recon":
-                print("RECON")
+                print("################ recon #################")
                 res = repo_recon(body)
                 pp(res)
-                # returns list of repos
-                # upserts repos
-                # send message
+                # __ returns list of repos
+                # __ upserts repos
+                # __ send message
                 self.sign_out()
 
             case "search":

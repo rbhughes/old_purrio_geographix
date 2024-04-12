@@ -11,8 +11,8 @@ payload = {
     "record": {
         "body": {
             "ggx_host": "scarab",
-            # "recon_root": "\\\\scarab\\ggx_projects\\sample",
-            "recon_root": "\\\\scarab\\ggx_projects",
+            "recon_root": "\\\\scarab\\ggx_projects\\stratton",
+            # "recon_root": "\\\\scarab\\ggx_projects",
             "suite": "geographix",
             "worker": "scarab",
         },
