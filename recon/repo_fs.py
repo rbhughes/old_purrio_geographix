@@ -19,7 +19,7 @@ def is_ggx_project(maybe: str):
     )
 
 
-def glob_repos(recon_root: str, ggx_host=f"GGX_{hostname().upper()}"):
+def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}"):
     repo_list = []
     hits = glob.glob(os.path.join(recon_root, "**/gxdb.db"), recursive=True)
     for hit in hits:

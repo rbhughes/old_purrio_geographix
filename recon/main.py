@@ -14,10 +14,10 @@ def repo_recon(body):
 
     # is_ggx = is_ggx_project(fs_path)
 
-    print("-----------------")
+    print("----------------")
     print("fs_path (norm)", fs_path)
     print("is_dir", is_dir)
-    print("-----------------")
+    print("----------------")
     # return {"one": 111, "two": "asdfasdf"}
 
     for repo in repos:

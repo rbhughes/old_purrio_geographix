@@ -13,7 +13,7 @@ class RetryException(Exception):
 
 
 # @basic_log
-@retry(RetryException, tries=2)
+@retry(RetryException, tries=5)
 def db_exec(conn: Dict, sql: List[str] or str):
     """Connect to SQLAnywhere and Run SQL commands from str or list.
     Results are returned as {desc: (column description), rows: (list of rows)}.
@@ -68,8 +68,8 @@ def db_exec(conn: Dict, sql: List[str] or str):
     finally:
         if cursor:
             cursor.close()
-        if connection:
-            connection.close()
+        # if connection:
+        #     connection.close()
 
 
 def make_conn_params(repo_path: str, host: str):
