@@ -8,16 +8,16 @@ from recon.epsg import epsg_codes
 def repo_recon(body):
     fs_path = normalize_path(body["recon_root"])
 
-    is_dir = dir_exists(fs_path)
+    # is_dir = dir_exists(fs_path)
 
     repos = glob_repos(fs_path)
 
     # is_ggx = is_ggx_project(fs_path)
 
-    print("----------------")
-    print("fs_path (norm)", fs_path)
-    print("is_dir", is_dir)
-    print("----------------")
+    # print("----------------")
+    # print("fs_path (norm)", fs_path)
+    # print("is_dir", is_dir)
+    # print("----------------")
     # return {"one": 111, "two": "asdfasdf"}
 
     for repo in repos:

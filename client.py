@@ -81,7 +81,6 @@ loader_payload = {
 
 if __name__ == "__main__":
     pw = PurrWorker()
-    threading.Thread(target=pw.process_queue, daemon=True).start()
+    threading.Thread(target=pw.process_loader_queue, daemon=True).start()
     pw.listen()
-
-    # pw.task_handler(batcher_payload)
+    pw.task_handler(batcher_payload)

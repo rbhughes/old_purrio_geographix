@@ -12,8 +12,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 
-from recon.main import repo_recon
-from asset.main import batcher
+from recon.recon import repo_recon
+from asset.batcher import batcher
+from asset.loader import loader
 
 load_dotenv()
 
@@ -39,21 +40,18 @@ def init_socket():
     return socket
 
 
-def valid_task(payload):
+def validate_task(payload):
     try:
-        if payload["record"]:
-            worker = payload["record"]["worker"]
-            if worker != hostname():
-                print(f"Task for different worker: ({worker} != {hostname()})")
-                return False
-            suite = payload["record"]["body"]["suite"]
-            status = payload["record"]["status"]
-            if suite != "geographix" and status != "PENDING":
-                print(f"Task suite != geographix ({suite}) or not 'PENDING'")
-                return False
-            return True
-    except KeyError:
-        return False
+        if payload.get("record"):
+            if (
+                payload.get("record").get("worker") == hostname()
+                and payload.get("record").get("status") == "PENDING"
+                and payload.get("record").get("body").get("suite") == "geographix"
+            ):
+                return payload.get("record")
+    except KeyError as ke:
+        print(ke)
+        return None
 
 
 class PurrWorker:
@@ -64,6 +62,7 @@ class PurrWorker:
         sb_key: str = os.environ.get("SUPABASE_KEY")
         self.supabase = create_client(sb_url, sb_key)
         self.loader_queue = queue.Queue()
+        # self.search_queue = queue.Queue()
         self.socket = init_socket()
         self.sign_in()
         self.running = True
@@ -73,7 +72,8 @@ class PurrWorker:
     def add_to_loader_queue(self, task):
         self.loader_queue.put(task)
 
-    def process_queue(self):
+    # gets invoked in separate thread
+    def process_loader_queue(self):
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=int(os.environ.get("LOADER_MAX_WORKERS"))
         ) as executor:
@@ -85,60 +85,40 @@ class PurrWorker:
                 except queue.Empty:
                     time.sleep(0.1)  # Avoid busy waiting
 
+    # gets invoked in separate thread
+    # def process_search_queue(self):
+    #     with concurrent.futures.ThreadPoolExecutor(
+    #         max_workers=int(os.environ.get("SEARCH_MAX_WORKERS"))
+    #     ) as executor:
+    #         while self.running or not self.search_queue.empty():
+    #             try:
+    #                 task = self.search_queue.get(block=False)
+    #                 # executor.submit(self.run, task)
+    #                 executor.submit(self.task_handler, task)
+    #             except queue.Empty:
+    #                 time.sleep(0.1)  # Avoid busy waiting
+
     def stop(self):
         self.running = False
 
-    # def taskZ(self, id):
-    #     print(f"Starting the task {id}...")
-    #     sleep(20)
-    #     return f"Done with task {id}"
-    #
-    # def run_tasks(self, executor, tasks):
-    #     futures = []
-    #     for task_id in tasks:
-    #         futures.append(executor.submit(self.taskZ, task_id))
-    #     return [f.result() for f in futures]
+    ########################################################################
 
-    # def add_payload(self, payload):
-    #     self.payloads.put(payload)
-
-    # def process_tasks(self):
-    #     futures = [
-    #         self.executor.submit(task_func, *args, **kwargs)
-    #         for task_func, args, kwargs in self.tasks
-    #     ]
-    #     for future in concurrent.futures.as_completed(futures):
-    #         f = future.result()
-    #         print(f)
-    #     self.tasks.clear()
-    # def process_tasks(self):
-    #     """
-    #     Processes all tasks in the queue using the ProcessPoolExecutor.
-    #     """
-    #     results = []
-    #     while True:
-    #         try:
-    #             payload = self.payloads.get_nowait()
-    #         except queue.Empty:
-    #             break
-    #         else:
-    #             with self.executor:
-    #                 future = self.executor.submit(self.task_handler, payload)
-    #                 results.append(future.result())
-    #     print(results)
-
-    # def process_all_tasks(self):
-    #     results = []
-    #     with self.executor:
-    #         futures = [
-    #             self.executor.submit(self.process_task, task) for task in self.tasks
-    #         ]
-    #         for future in concurrent.futures.as_completed(futures):
-    #             results.append(future.result())
-    #     self.tasks.clear()
-    #     return results
-
-    ##########################################
+    def manage_sb_task(self, task, status=None):
+        if status is None:
+            # print("____SHOULD DELETE TASK", task.get("id"), status)
+            data, count = (
+                self.supabase.table("task").delete().eq("id", task.get("id")).execute()
+            )
+            # print(data, count)
+        elif status in ("PROCESSING", "FAILED"):
+            # print("____SHOULD UPDATE TASK", task.get("id"), status)
+            data, count = (
+                self.supabase.table("task")
+                .update({"status": status})
+                .eq("id", task.get("id"))
+                .execute()
+            )
+            # print(data, count)
 
     def sign_in(self):
         sb_email: str = os.environ.get("SUPABASE_EMAIL")
@@ -151,17 +131,34 @@ class PurrWorker:
         self.supabase.auth.sign_out()
         sys.exit()
 
-    def task_handler(self, payload):
-        if not valid_task(payload):
-            return
+    def task_handler(self, task):
 
-        directive: str = payload["record"]["directive"]
-        body: dict = payload["record"]["body"]
+        self.manage_sb_task(task, "PROCESSING")
+
+        directive: str = task.get("directive")
+        body: dict = task.get("body")
+
         match directive:
             case "loader":
                 print("################ loader")
-                # print(body)
-                return "fakeness loader"
+                print("loader...")
+
+                res = (
+                    self.supabase.table("repo")
+                    .select("*")
+                    .eq("id", body.get("repo_id"))
+                    .execute()
+                )
+                if not res.data:
+                    print(f"batcher error: repo_id not found")
+
+                repo = res.data[0]
+
+                loader(body, repo)
+
+                self.manage_sb_task(task)
+
+                # return "fakeness loader"
                 # self.add_loader_task(self.task_handler, body)
                 # self.sign_out()
 
@@ -182,13 +179,17 @@ class PurrWorker:
                 )
                 if not res.data:
                     print(f"batcher error: repo_id not found")
-                    print(body)
-                    return
+                    # print(body)
+                    # return
 
                 repo = res.data[0]
 
                 tasks = batcher(body, dna, repo)
                 data, count = self.supabase.table("task").upsert(tasks).execute()
+                print("---------batcher--------------------------------")
+                # print(data, count)
+                # print("------------------------------------------------")
+                self.manage_sb_task(task)
 
                 # self.sign_out()
 
@@ -196,17 +197,11 @@ class PurrWorker:
                 print("################ recon")
                 res = repo_recon(body)
                 data, count = self.supabase.table("repo").upsert(res).execute()
-                print("------------------------------------------------")
-                print(data)
-                print(count)
-                print("------------------------------------------------")
+                print("---------recon----------------------------------")
+                # print(data, count)
+                # print("------------------------------------------------")
+                self.manage_sb_task(task)
 
-                # for r in res:
-                #     pp(r)
-                #     print("------------------------------------------------")
-                # __ returns list of repos
-                # __ upserts repos
-                # __ send message
                 # self.sign_out()
 
             case "search":
@@ -221,31 +216,11 @@ class PurrWorker:
         channel = self.socket.set_channel("realtime:public:task")
 
         def pluck(payload):
-            self.add_to_loader_queue(payload)
-            # print("pppppppp")
-            # print(payload)
-            # print("pppppppp")
-            # future_task = self.executor.submit(self.task_handler, payload)
-            # future_task.result()
+            task = validate_task(payload)
+            self.add_to_loader_queue(task)
 
-            # with ThreadPoolExecutor(max_workers=5) as executor:
-            #     task_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
-            #     results = self.run_tasks(executor, task_ids)
-            #     for result in results:
-            #         print(result)
-
-            # with ThreadPoolExecutor(max_workers=5) as executor:
-            #     # futureTask = executor.submit(self.taskZ, 3)
-            #     future_task = executor.submit(self.task_handler, payload)
-            #     print(future_task.result())
-
-            # self.add_payload(payload)
-            # self.process_tasks()
-
-        # channel.join().on("*", self.task_handler)
-        channel.join().on("*", pluck)
-
-        # self.add_loader_task(self.task_handler, body)
+        channel.join().on("INSERT", pluck)
+        channel.join().on("UPDATE", pluck)
 
         self.socket.listen()
 
