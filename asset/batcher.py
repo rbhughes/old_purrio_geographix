@@ -78,7 +78,7 @@ def batcher(body, dna, repo):
             "asset": body.get("asset"),
             "tag": body.get("tag"),
             "asset_id_keys": dna.get("asset_id_keys"),
-            "batch_id_keys": hashify(json.dumps(body).lower()),
+            "batch_id": hashify(json.dumps(body).lower()),
             "conn": repo.get("conn"),
             "suite": repo.get("suite"),
             "prefixes": dna.get("prefixes"),

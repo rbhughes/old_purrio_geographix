@@ -1,36 +1,34 @@
 import os
 import sys
-from common.util import hostname
-from realtime.connection import Socket
-from supabase import create_client
-from dotenv import load_dotenv
 import simplejson as json
 import concurrent.futures
 import queue
-
 import time
-from concurrent.futures import ThreadPoolExecutor
 
+import logging
+from common.logger import setup_logging, basic_log
 
+from realtime.connection import Socket
+from supabase import create_client
+from common.util import hostname
 from recon.recon import repo_recon
 from asset.batcher import batcher
 from asset.loader import loader
+from dotenv import load_dotenv
+
+from common.typeish import make_data_class
 
 load_dotenv()
-
-#         "body": {
-#             "ggx_host": "scarab",
-#             "recon_root": "\\\\scarab\\ggx_projects\\sample",
-#             "suite": "geographix",
-#             "worker": "scarab",
-#         },
-#         "directive": "recon",
-#         "id": 92899,
-#         "status": "PENDING",
-#         "worker": "scarab",
+logger = logging.getLogger("tavaio")
+setup_logging("purr_worker")
 
 
-def init_socket():
+def init_socket() -> Socket:
+    """
+    Initialize supabase realtime socket from .env. Project details are from:
+    supabase.com/dashboard/<project>/settings/api
+    :return: realtime.connection Socket
+    """
     sb_key: str = os.environ.get("SUPABASE_KEY")
     sb_id: str = os.environ.get("SUPABASE_ID")
     socket_url = (
@@ -40,7 +38,11 @@ def init_socket():
     return socket
 
 
-def validate_task(payload):
+def validate_task(payload) -> dict | None:
+    """
+    :param payload: From task table
+    :return:
+    """
     try:
         if payload.get("record"):
             if (
@@ -48,7 +50,13 @@ def validate_task(payload):
                 and payload.get("record").get("status") == "PENDING"
                 and payload.get("record").get("body").get("suite") == "geographix"
             ):
-                return payload.get("record")
+                task = payload.get("record")
+                print("...................................")
+                # print(payload.get("record").get("body").keys())
+                # dc = make_data_class(task)
+                # print(dc)
+                print("...................................")
+                return task
     except KeyError as ke:
         print(ke)
         return None
@@ -67,7 +75,7 @@ class PurrWorker:
         self.sign_in()
         self.running = True
 
-    ##########################################
+    ##########
 
     def add_to_loader_queue(self, task):
         self.loader_queue.put(task)
@@ -103,22 +111,46 @@ class PurrWorker:
 
     ########################################################################
 
-    def manage_sb_task(self, task, status=None):
+    def manage_task(self, task_id, status=None):
         if status is None:
-            # print("____SHOULD DELETE TASK", task.get("id"), status)
-            data, count = (
-                self.supabase.table("task").delete().eq("id", task.get("id")).execute()
-            )
-            # print(data, count)
+            self.supabase.table("task").delete().eq("id", task_id).execute()
         elif status in ("PROCESSING", "FAILED"):
-            # print("____SHOULD UPDATE TASK", task.get("id"), status)
-            data, count = (
+            (
                 self.supabase.table("task")
                 .update({"status": status})
-                .eq("id", task.get("id"))
+                .eq("id", task_id)
                 .execute()
             )
-            # print(data, count)
+
+    def manage_asset_batch(self, task_id, batch_id, status=None):
+        if status is None:
+            (
+                self.supabase.table("batch_ledger")
+                .delete()
+                .eq("batch_id", batch_id)
+                .eq("task_id", task_id)
+                .execute()
+            )
+        else:
+            (
+                self.supabase.table("batch_ledger")
+                .update({"status": status})
+                .eq("batch_id", batch_id)
+                .eq("task_id", task_id)
+                .execute()
+            )
+
+    def is_batch_finished(self, batch_id) -> bool:
+        # pycharm inspector is wrong
+        # https://anand2312.github.io/pgrest/reference/builders/
+        # noinspection PyTypeChecker
+        res = (
+            self.supabase.table("batch_ledger")
+            .select("*", count="exact")
+            .eq("batch_id", batch_id)
+            .execute()
+        )
+        return res.count == 0
 
     def sign_in(self):
         sb_email: str = os.environ.get("SUPABASE_EMAIL")
@@ -131,83 +163,94 @@ class PurrWorker:
         self.supabase.auth.sign_out()
         sys.exit()
 
+    def fetch_repo(self, body):
+        res = (
+            self.supabase.table("repo")
+            .select("*")
+            .eq("id", body.get("repo_id"))
+            .execute()
+        )
+        return res.data[0]
+
+    @basic_log
     def task_handler(self, task):
-
-        self.manage_sb_task(task, "PROCESSING")
-
+        self.manage_task(task.get("id"), "PROCESSING")
         directive: str = task.get("directive")
         body: dict = task.get("body")
 
         match directive:
             case "loader":
-                print("################ loader")
-                print("loader...")
+                logger.info("loader stuff")
+                print("############################## loader")
 
-                res = (
-                    self.supabase.table("repo")
-                    .select("*")
-                    .eq("id", body.get("repo_id"))
-                    .execute()
-                )
-                if not res.data:
-                    print(f"batcher error: repo_id not found")
+                # 1. get associated repo
+                repo = self.fetch_repo(body)
 
-                repo = res.data[0]
-
+                # 2. run this loader task (select from source, write to pg)
                 loader(body, repo)
 
-                self.manage_sb_task(task)
+                # 3. remove task from task table
+                self.manage_task(task.get("id"))
 
-                # return "fakeness loader"
-                # self.add_loader_task(self.task_handler, body)
-                # self.sign_out()
+                # 4. remove batch/task combo from batch_ledger
+                self.manage_asset_batch(task.get("id"), body.get("batch_id"))
+
+                # 5. check if the whole batch is done
+                done = self.is_batch_finished(task.get("body").get("batch_id"))
+                if done:
+                    print("loader is really done DONE")
 
             case "batcher":
-                print("################ batcher")
+                print("############################## batcher")
 
+                # 1. get associated repo
+                repo = self.fetch_repo(body)
+
+                # 2. get asset dna from edge function
                 res = self.supabase.functions.invoke(
                     body.get("suite"),
                     invoke_options={"body": {"asset": body.get("asset")}},
                 )
                 dna = json.loads(res.decode("utf-8"))
 
-                res = (
-                    self.supabase.table("repo")
-                    .select("*")
-                    .eq("id", body.get("repo_id"))
-                    .execute()
-                )
-                if not res.data:
-                    print(f"batcher error: repo_id not found")
-                    # print(body)
-                    # return
-
-                repo = res.data[0]
-
+                # 3. define a batch of tasks
                 tasks = batcher(body, dna, repo)
-                data, count = self.supabase.table("task").upsert(tasks).execute()
-                print("---------batcher--------------------------------")
-                # print(data, count)
-                # print("------------------------------------------------")
-                self.manage_sb_task(task)
 
-                # self.sign_out()
+                # 4. enqueue batch of tasks (and get ids from return)
+                upres = self.supabase.table("task").upsert(tasks).execute()
+
+                # 5. update batch ledger too
+                ledgers = [
+                    {
+                        "batch_id": task.get("body").get("batch_id"),
+                        "task_id": task.get("id"),
+                        "num_tasks": len(tasks),
+                        "status": "PENDING",
+                        "directive": "loader",
+                    }
+                    for task in upres.data
+                ]
+                self.supabase.table("batch_ledger").upsert(ledgers).execute()
+
+                # 6. remove this task
+                self.manage_task(task.get("id"))
 
             case "recon":
-                print("################ recon")
-                res = repo_recon(body)
-                data, count = self.supabase.table("repo").upsert(res).execute()
-                print("---------recon----------------------------------")
-                # print(data, count)
-                # print("------------------------------------------------")
-                self.manage_sb_task(task)
+                print("############################## recon")
 
-                # self.sign_out()
+                # 1. run repo_recon
+                repos = repo_recon(body)
+
+                # 2. write repos to repo table
+                self.supabase.table("repo").upsert(repos).execute()
+
+                # 3. remove this task
+                self.manage_task(task.get("id"))
 
             case "search":
-                print("SEARCH")
-            case _:
-                print("ANYTHING")
+                print("############################## search")
+            case "halt":
+                print("############################## halt")
 
         # self.sign_out()
 
@@ -217,7 +260,8 @@ class PurrWorker:
 
         def pluck(payload):
             task = validate_task(payload)
-            self.add_to_loader_queue(task)
+            if task:
+                self.add_to_loader_queue(task)
 
         channel.join().on("INSERT", pluck)
         channel.join().on("UPDATE", pluck)
