@@ -39,11 +39,10 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}"):
     return repo_list
 
 
-def dir_stats(repo):
+def dir_stats(repo_base):
     """https://learn.microsoft.com/en-us/sysinternals/downloads/du"""
-    fs_path = repo.get("fs_path")
     res = run(
-        [DUPATH, "-q", "-nobanner", fs_path],
+        [DUPATH, "-q", "-nobanner", repo_base["fs_path"]],
         capture_output=True,
         text=True,
         check=False,
@@ -62,7 +61,7 @@ def dir_stats(repo):
     return meta
 
 
-def repo_mod(repo: dict):
+def repo_mod(repo_base):
     last_mod = datetime(1970, 1, 1)
 
     def traverse(dir_path: str):
@@ -82,5 +81,5 @@ def repo_mod(repo: dict):
             except (OSError, ValueError):
                 continue
 
-    traverse(repo["fs_path"])
+    traverse(repo_base["fs_path"])
     return {"repo_mod": last_mod.strftime("%Y-%m-%d %H:%M:%S")}

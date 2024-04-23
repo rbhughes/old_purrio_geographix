@@ -1743,7 +1743,7 @@ def get_wkts(fs_path: str):
     }
 
 
-def epsg_codes(repo):
+def epsg_codes(repo_base):
     """doc"""
 
     storage_epsg = 0
@@ -1751,7 +1751,7 @@ def epsg_codes(repo):
     display_epsg = 0
     display_name = "unknown"
 
-    wkt = get_wkts(repo.get("fs_path"))
+    wkt = get_wkts(repo_base["fs_path"])
 
     # s_geog = re.search(r"(?<=GEOGCS\[\").+?(?=\"\,)", wkt.get("storage_wkt"))
     s_geog = re.search(r"(?<=GEOGCS\[\").+?(?=\",)", wkt.get("storage_wkt"))

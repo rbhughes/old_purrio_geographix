@@ -60,7 +60,7 @@ WELLS_WITH_VECTOR_LOG = "SELECT COUNT(DISTINCT wellid) AS tally FROM gx_well_cur
 WELLS_WITH_ZONE = "SELECT COUNT(DISTINCT uwi) AS tally FROM well_zone_interval"
 
 
-def well_counts(repo):
+def well_counts(repo_base):
     """doc"""
     counter_sql = {
         "well_count": WELLS,
@@ -77,7 +77,7 @@ def well_counts(repo):
         "wells_with_zone": WELLS_WITH_ZONE,
     }
 
-    res = db_exec(repo.get("conn"), list(counter_sql.values()))
+    res = db_exec(repo_base["conn"], list(counter_sql.values()))
 
     counts = {}
 
@@ -87,12 +87,12 @@ def well_counts(repo):
     return counts
 
 
-def hull_outline(repo):
-    res = db_exec(repo.get("conn"), NOTNULL_LONLAT)
+def hull_outline(repo_base):
+    res = db_exec(repo_base["conn"], NOTNULL_LONLAT)
     points = [[r["surface_longitude"], r["surface_latitude"]] for r in res]
 
     if len(points) < 3:
-        print(f"Too few valid Lon/Lat points for polygon: {repo.get('name')}")
+        print(f"Too few valid Lon/Lat points for polygon: {repo_base["name"]}")
         return {"outline": None}
 
     hull = concave_hull(points, concavity=HULL_CONCAVITY)

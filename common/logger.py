@@ -33,11 +33,11 @@ def setup_logging(tag=None):
 
     LOG_DIR = "logs"
 
-    logfile = os.path.join(LOG_DIR, f"{tag}_{ts}_tavaio.log")
+    logfile = os.path.join(LOG_DIR, f"{tag}_{ts}_purrio.log")
     print("_____________________HEY LOGFILE")
     print(logfile)
 
-    logger = logging.getLogger("tavaio")
+    logger = logging.getLogger("purrio")
     logger.setLevel(logging.INFO)
     # logger.setLevel(logging.DEBUG)
 
@@ -64,7 +64,7 @@ def setup_logging(tag=None):
 
 # https://ankitbko.github.io/blog/2021/04/logging-in-python/
 def basic_log(func):
-    logger = logging.getLogger("tavaio")
+    logger = logging.getLogger("purrio")
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):

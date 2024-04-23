@@ -1,50 +1,35 @@
-from pprint import pp
 from recon.repo_fs import glob_repos, dir_stats, repo_mod
 from recon.repo_db import well_counts, hull_outline
-from common.util import dir_exists, normalize_path
 from recon.epsg import epsg_codes
+from common.util import normalize_path
+from common.typeish import validate_repo
+from typing import Dict, List, Any
 
 
-def repo_recon(body):
-    fs_path = normalize_path(body["recon_root"])
-
-    # is_dir = dir_exists(fs_path)
+def repo_recon(body) -> List[Dict[str, Any]]:
+    """
+    :param body: A ReconTaskBody
+    :return: A list of valid Repo classes having all expected Repo elements.
+    Repo classes are turned back to dicts since they are going into supabase.
+    """
+    fs_path = normalize_path(body.recon_root)
 
     repos = glob_repos(fs_path)
 
-    # is_ggx = is_ggx_project(fs_path)
-
-    # print("----------------")
-    # print("fs_path (norm)", fs_path)
-    # print("is_dir", is_dir)
-    # print("----------------")
-    # return {"one": 111, "two": "asdfasdf"}
-
-    for repo in repos:
+    for repo_base in repos:
         for func in [
             well_counts,
+            hull_outline,
             epsg_codes,
             dir_stats,
             repo_mod,
-            hull_outline,
         ]:
-            md = func(repo)
-            repo.update(md)
+            md = func(repo_base)
+            repo_base.update(md)
 
-    return repos
+    validated_repo_dicts = [validate_repo(r).to_dict() for r in repos]
+    return validated_repo_dicts
 
-
-#
-#
-# body = {
-#     "ggx_host": "scarab",
-#     "recon_root": "\\\\scarab\\ggx_projects\\sample",
-#     "suite": "geographix",
-#     "worker": "scarab",
-# }
-#
-#
-# repo_recon(body)
 
 """
 import asyncio

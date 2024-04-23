@@ -76,28 +76,28 @@ def compose_docs(data, body):
         doc = {}
 
         o["id"] = hashify(
-            str(body.get("repo_id"))
-            + str(body.get("asset"))
-            + str(body.get("suite"))
-            + str(body.get("repo_id"))
-            + "".join([str(row[k]) for k in body.get("asset_id_keys")])
+            str(body.repo_id)
+            + str(body.asset)
+            + str(body.suite)
+            + str(body.repo_id)
+            + "".join([str(row[k]) for k in body.asset_id_keys])
         )
 
-        o["well_id"] = "-".join([str(row[k]) for k in body.get("well_id_keys")])
-        o["repo_id"] = body.get("repo_id")
-        o["repo_name"] = body.get("repo_name")
-        o["tag"] = body.get("tag")
-        o["suite"] = body.get("suite")
+        o["well_id"] = "-".join([str(row[k]) for k in body.well_id_keys])
+        o["repo_id"] = body.repo_id
+        o["repo_name"] = body.repo_name
+        o["tag"] = body.tag
+        o["suite"] = body.suite
 
         # invoke xformer
-        for col, xf in body.get("xforms").items():
+        for col, xf in body.xforms.items():
             data_type = xf.get("ts_type")
             func_name = xf.get("xform")
             xform_args = (func_name, row, col, data_type, None)
             row[col] = xformer(xform_args)
 
         # build json based on prefixes
-        for prefix, table in body.get("prefixes").items():
+        for prefix, table in body.prefixes.items():
             doc[table] = {}
             for key, val in row.items():
                 if key.startswith(prefix):
@@ -112,11 +112,11 @@ def compose_docs(data, body):
 def loader(body, repo):
 
     try:
-        data = db_exec(repo.get("conn"), body.get("selector"))
+        data = db_exec(repo.conn, body.selector)
         # print(res)
         docs = compose_docs(data, body)
         # print(json.dumps(docs, indent=2))
-        res = pg_upserter(docs, body.get("asset"))
+        res = pg_upserter(docs, body.asset)
 
     except Exception as e:
         print(e)

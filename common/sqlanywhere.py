@@ -4,6 +4,7 @@ import pyodbc
 import os
 from retry import retry
 from common.util import normalize_path
+from common.typeish import SQLAnywhereConn
 
 # from .logger import basic_log
 
@@ -14,7 +15,7 @@ class RetryException(Exception):
 
 # @basic_log
 @retry(RetryException, tries=5)
-def db_exec(conn: Dict, sql: List[str] or str):
+def db_exec(conn: dict | SQLAnywhereConn, sql: List[str] or str):
     """Connect to SQLAnywhere and Run SQL commands from str or list.
     Results are returned as {desc: (column description), rows: (list of rows)}.
     If sql is a single string, a single result dict is returned.
@@ -24,6 +25,10 @@ def db_exec(conn: Dict, sql: List[str] or str):
     exactly matches the name used by whatever process has the gxdb opened.
     check in dbisql: select db_name( number ) from sa_db_list();
     """
+
+    if type(conn) is SQLAnywhereConn:
+        conn = conn.to_dict()
+
     cursor = None
     try:
         connection = pyodbc.connect(**conn)
