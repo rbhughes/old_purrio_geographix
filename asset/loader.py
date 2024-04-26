@@ -1,21 +1,11 @@
 from common.sqlanywhere import db_exec
-from common.util import hashify
+from common.util import hashify, local_pg_params
 import simplejson as json
 import psycopg2
 import psycopg2.extras
 import os
 
 from asset.xformer import xformer
-
-
-def local_pg_params():
-    return {
-        "user": "postgres",
-        "host": "localhost",
-        "database": "postgres",
-        "password": os.environ.get("LOCAL_PG_PASS"),
-        "port": 5432,
-    }
 
 
 ASSET_COLUMNS = ["id", "repo_id", "repo_name", "well_id", "suite", "tag", "doc"]

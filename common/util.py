@@ -54,3 +54,13 @@ def dir_exists(fs_path: str):
 
 def normalize_path(fs_path: str):
     return fs_path.replace("\\", "/")
+
+
+def local_pg_params():
+    return {
+        "user": "postgres",
+        "host": "localhost",
+        "database": "postgres",
+        "password": os.environ.get("LOCAL_PG_PASS"),
+        "port": 5432,
+    }

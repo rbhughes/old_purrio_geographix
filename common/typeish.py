@@ -1,6 +1,6 @@
+from common.util import hostname
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
-from common.util import hostname
 
 
 @dataclass
@@ -172,6 +172,11 @@ class Repo:
 @dataclass
 class SearchTaskBody:
     tag: str
+    terms: str
+    assets: List[str]
+    suites: List[str]
+    user_id: str
+    search_id: int
 
     def to_dict(self):
         return asdict(self)
@@ -232,10 +237,20 @@ def validate_repo(payload: dict):
     )
 
 
+def is_valid_status(status: str):
+    valid_statuses = ["PENDING", "PROCESSING", "FAILED"]
+    return status.upper() in valid_statuses
+
+
 def validate_task(payload: dict):
 
     try:
         if payload["record"]:
+            if "status" in payload["record"] and not is_valid_status(
+                payload["record"]["status"]
+            ):
+                raise Exception("Unexpected status in payload")
+
             if (
                 payload["record"]["worker"] == hostname()
                 and payload["record"]["status"] == "PENDING"
@@ -280,14 +295,15 @@ def validate_task(payload: dict):
                     )
 
                 if task.get("directive") == "search":
-                    print("...................................")
-                    print("search")
-                    # print(payload.get("record").get("body").keys())
-                    # dc = make_data_class(task)
-                    # print(dc)
-                    # return dc
-                    print("...................................")
-                    pass
+                    # NOTE: task.body.search_id = task.id
+                    task["body"]["search_id"] = task["id"]
+                    return SearchTask(
+                        body=SearchTaskBody(**task["body"]),
+                        directive=task["directive"],
+                        id=task["id"],
+                        status=task["status"],
+                        worker=task["worker"],
+                    )
 
     except KeyError as ke:
         print(ke)
