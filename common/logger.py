@@ -1,9 +1,11 @@
+import functools
 import logging
 import os
-import functools
 import sys
 from datetime import datetime
+from logging import Logger
 
+from typing import Callable
 
 # CRITICAL
 # ERROR
@@ -11,31 +13,30 @@ from datetime import datetime
 # INFO
 # DEBUG
 
+LOG_DIR = os.environ.get("LOG_DIR") or "logs"
 
-def setup_logging(tag=None):
-    # log_dir = os.getenv('LOG_DIR')
-    # log_level = os.getenv('LOG_LEVEL')
 
+def setup_logging(tag=None) -> Logger:
     """
+    Initialize a named logger
+
     NOTE: enabling DEBUG can generate HUGE log files, as they include SQL
     statements and collected data. It is best to insert WHERE clause filters or
     otherwise limit the data before debugging!
-    """
 
-    """
     ANOTHER NOTE: It would be nice to have the logs rotate, but that turns
-    out to be quite complicated since log writes come from from multi-threaded
+    out to be quite complicated since log writes come from multithreaded
     processes. The "official" way is to use a QueueHandler...yuck.
+
+    :param tag: Optional tag name to insert into the logfile name
+    :return: Logger
     """
 
     # ts = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     ts = datetime.now().strftime("%Y-%m-%d_%H_%M_%S")
 
-    LOG_DIR = "logs"
-
     logfile = os.path.join(LOG_DIR, f"{tag}_{ts}_purrio.log")
-    print("_____________________HEY LOGFILE")
-    print(logfile)
+    print("Initialized log file: " + logfile)
 
     logger = logging.getLogger("purrio")
     logger.setLevel(logging.INFO)
@@ -63,7 +64,12 @@ def setup_logging(tag=None):
 
 
 # https://ankitbko.github.io/blog/2021/04/logging-in-python/
-def basic_log(func):
+def basic_log(func) -> Callable:
+    """
+    Wrapped decorator that logs just about everything. Just add @basic_log
+    :param func: Any function
+    :return: Callable wrapper
+    """
     logger = logging.getLogger("purrio")
 
     @functools.wraps(func)

@@ -1,23 +1,29 @@
+import simplejson as json
 from common.sqlanywhere import db_exec
 from common.util import hashify, hostname
-import simplejson as json
-
-# body = {
-#     "asset": "well",
-#     "chunk": 100,
-#     "cron": "",
-#     "filter": "",
-#     "id": 76,
-#     "recency": 14,
-#     "repo_fs_path": "//scarab/ggx_projects/Stratton",
-#     "repo_id": "e68fa3e5-9e8b-18e0-e690-9839d0dc0f22",
-#     "repo_name": "Stratton",
-#     "suite": "geographix",
-#     "tag": "GRINKLE",
-# }
 
 
-def batch_selector(args):
+from typing import List
+
+
+def batch_selector(args) -> List[str]:
+    """
+     Given total and chunk size, define a batch of SQL selects.
+     The count is limited by SQLAnywhere's 'SELECT TOP X START AT Y' syntax.
+     Example  (total: 1137, chunk: 500):
+     sql: 'select * from well order by uwi'
+
+    'SELECT TOP 500 START AT 1 * from well order by uwi',
+    'SELECT TOP 500 START AT 501 * from well order by uwi',
+    'SELECT TOP 137 START AT 1001 * from well order by uwi'
+
+     :param args: a tuple containing the following parameters:
+         chunk: number of rows to collect per batch
+         select: a SQL SELECT statement
+         order: a SQL ORDER BY clause
+         where: a SQL WHERE clause
+     :return: list of SQL select statements
+    """
     asset_count, chunk, select, order, where = args
 
     batch = []
@@ -36,11 +42,19 @@ def batch_selector(args):
     return batch
 
 
-def batcher(body, dna, repo):
+def batcher(body, dna, repo) -> List[dict]:
+    """
+    Used in conjunction with a Supabase Edge function, this constructs SQL
+    select statements to collect asset data from the GXDB.
+    :param body: An instance of BatcherTaskBody
+    :param dna: A JSON object from the GeoGraphix edge function(s)
+    :param repo: The target project
+    :return: A list of loader task defintions to be enqueued
+    """
 
     # dna...
     select: str = dna.get("select")
-    where_recent_slot: str = dna.get("where_recent_slot")
+    purr_recent: str = dna.get("purr_recent")
     order: str = dna.get("order")
 
     # inject recency WHERE clause into select if specified
@@ -50,7 +64,7 @@ def batcher(body, dna, repo):
         )
     else:
         recent_peg = ""
-    select = select.replace(where_recent_slot, recent_peg)
+    select = select.replace(purr_recent, recent_peg)
 
     # construct WHERE clause
     where_parts = ["WHERE 1=1"]
@@ -62,8 +76,9 @@ def batcher(body, dna, repo):
     count = f"SELECT COUNT(*) AS count FROM ( {select} ) c {where}"
     res = db_exec(repo.conn, count)
     if not res or len(res) == 0:
-        print("batcher error: could not get asset count")
-        return
+        # print("batcher error: could not get asset count")
+        print(f"No {body.suite} {body.asset} records found in .")
+        return []
     asset_count: int = res[0].get("count")
 
     # get batches
@@ -80,6 +95,8 @@ def batcher(body, dna, repo):
             "conn": repo.conn.to_dict(),
             "suite": repo.suite,
             "prefixes": dna.get("prefixes"),
+            "purr_delimiter": dna.get("purr_delimiter"),
+            "purr_null": dna.get("purr_null"),
             "repo_id": repo.id,
             "repo_name": repo.name,
             "selector": selector,

@@ -1,23 +1,22 @@
-import concurrent.futures
 import logging
 import os
-import queue
 import simplejson as json
 import sys
-import time
-
+import threading
 from dotenv import load_dotenv
 from realtime.connection import Socket
-from supabase import create_client
 
 from asset.batcher import batcher
 from asset.loader import loader
 from common.logger import setup_logging, basic_log
+from common.sb_client import SupabaseClient
+from common.queue_manager import QueueManager
+from common.task_manager import TaskManager
 from common.typeish import validate_task, validate_repo, Repo
 from recon.recon import repo_recon
 from search.search import search_local_pg
 
-from typing import Optional, Dict, List, Any
+from typing import Dict, List, Any
 
 
 load_dotenv()
@@ -25,172 +24,62 @@ logger = logging.getLogger("purrio")
 setup_logging("purr_worker")
 
 
-def init_socket() -> Socket:
-    """
-    Initialize supabase realtime socket from .env. Project details are from:
-    supabase.com/dashboard/<project>/settings/api
-    :return: A realtime.connection Socket
-    """
-    sb_key: str = os.environ.get("SUPABASE_KEY")
-    sb_id: str = os.environ.get("SUPABASE_ID")
-    socket_url = (
-        f"wss://{sb_id}.supabase.co/realtime/v1/websocket?apikey={sb_key}&vsn=1.0.0"
-    )
-    return Socket(socket_url, auto_reconnect=True)
-
-
 class PurrWorker:
     """
     PurrWorker client
     """
 
-    def __init__(self):
-        sb_url: str = os.environ.get("SUPABASE_URL")
-        sb_key: str = os.environ.get("SUPABASE_KEY")
-        self.supabase = create_client(sb_url, sb_key)
-        self.work_queue = queue.Queue()
-        self.search_queue = queue.Queue()
+    def __init__(self) -> None:
+        self.supabase = SupabaseClient()
+        self.task_manager = TaskManager(self.supabase)
+
+        work_max_workers = int(os.environ.get("WORK_MAX_WORKERS"))
+        self.work_queue = QueueManager(work_max_workers)
+        self.work_queue_thread = threading.Thread(
+            target=self.work_queue.process_queue,
+            args=(self.task_handler,),
+            daemon=True,
+        )
+
+        search_max_workers = int(os.environ.get("SEARCH_MAX_WORKERS"))
+        self.search_queue = QueueManager(search_max_workers)
+        self.search_queue_thread = threading.Thread(
+            target=self.search_queue.process_queue,
+            args=(self.task_handler,),
+            daemon=True,
+        )
         self.socket = init_socket()
-        self.sign_in()
         self.running = True
 
+    def start_queue_processing(self):
+        self.work_queue.process_queue(self.task_handler)
+        self.search_queue.process_queue(self.task_handler)
+
+    def stop_queue_processing(self):
+        self.work_queue.stop()
+        self.search_queue.stop()
+
     def add_to_work_queue(self, task) -> None:
-        """
-        :param task: Adds a validated task to work queue.
-        """
-        self.work_queue.put(task)
+        self.work_queue.add_task(task)
 
     def process_work_queue(self) -> None:
-        """
-        Work Queue
-        This gets invoked after PurrWorker instantiation in a separate thread:
-        threading.Thread(target=pw.process_work_queue, daemon=True).start()
-        :return: None
-        """
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=int(os.environ.get("LOADER_MAX_WORKERS"))
-        ) as executor:
-            while self.running or not self.work_queue.empty():
-                try:
-                    task = self.work_queue.get(block=False)
-                    executor.submit(self.task_handler, task)
-                except queue.Empty:
-                    time.sleep(0.1)  # Avoid busy waiting
+        self.work_queue.process_queue(self.task_handler)
 
     def add_to_search_queue(self, task) -> None:
-        """
-        :param task: Adds a validated task to search queue.
-        """
-        self.search_queue.put(task)
+        self.search_queue.add_task(task)
 
     def process_search_queue(self) -> None:
-        """
-        Search Queue
-        This gets invoked after PurrWorker instantiation in a separate thread:
-        threading.Thread(target=pw.process_work_queue, daemon=True).start()
-        :return: None
-        """
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=int(os.environ.get("SEARCH_MAX_WORKERS"))
-        ) as executor:
-            while self.running or not self.search_queue.empty():
-                try:
-                    task = self.search_queue.get(block=False)
-                    executor.submit(self.task_handler, task)
-                except queue.Empty:
-                    time.sleep(0.1)  # Avoid busy waiting
-
-    def stop(self) -> None:
-        """
-        Halt the listening ThreadPoolExecutor(s)
-        """
-        self.running = False
-        # sleep and then sys.exit()
+        self.search_queue.process_queue(self.task_handler)
 
     ########################################################################
 
-    # def manage_task(self, task_id: int, status=None):
-    def manage_task(self, task_id: int, status: Optional[str] = None) -> None:
+    def halt(self) -> None:
         """
-        We use the supabase task table with realtime as a queue. This method
-        updates the task status and (later) deletes it
-        :param task_id: An autoincrement int from supabase
-        :param status: PENDING, PROCESSING or FAILED. see is_valid_status()
+        Stop queues, sign out of Supbase and shut down
         :return: None
         """
-        if status is None:
-            self.supabase.table("task").delete().eq("id", task_id).execute()
-        elif status in ("PROCESSING", "FAILED"):
-            (
-                self.supabase.table("task")
-                .update({"status": status})
-                .eq("id", task_id)
-                .execute()
-            )
-
-    def manage_asset_batch(self, task_id, batch_id, status=None) -> None:
-        """
-        A batcher task can spawn multiple loader (sub)tasks. We keep track of
-        them in the supabase batch_ledger table.
-        :param task_id: The normal task_id of a loader task
-        :param batch_id: Think of it as the "parent" task_id (autoincr int)
-        :param status: PENDING, PROCESSING or FAILED
-        :return: None
-        See also: manage_task() and is_batch_finished()
-        """
-        if status is None:
-            (
-                self.supabase.table("batch_ledger")
-                .delete()
-                .eq("batch_id", batch_id)
-                .eq("task_id", task_id)
-                .execute()
-            )
-        else:
-            (
-                self.supabase.table("batch_ledger")
-                .update({"status": status})
-                .eq("batch_id", batch_id)
-                .eq("task_id", task_id)
-                .execute()
-            )
-
-    def is_batch_finished(self, batch_id) -> bool:
-        """
-        As loader tasks are processed, check the batch_ledger table to see if
-        any tasks remain for the given batch_id. All gone returns True
-        :param batch_id: Think of it as the "parent" task_id (autoincr int)
-        :return: bool: True if no loader tasks remain in batch_ledger. Note that
-        any failed tasks (i.e. status = FAILED) will cause False.
-        """
-        # pycharm inspector is wrong
-        # https://anand2312.github.io/pgrest/reference/builders/
-        # noinspection PyTypeChecker
-        res = (
-            self.supabase.table("batch_ledger")
-            .select("*", count="exact")
-            .eq("batch_id", batch_id)
-            .execute()
-        )
-        return res.count == 0
-
-    def sign_in(self) -> None:
-        """
-        Get supabase user credentials from dotenv and sign_in
-        :return: None
-        """
-        sb_email: str = os.environ.get("SUPABASE_EMAIL")
-        sb_password: str = os.environ.get("SUPABASE_PASSWORD")
-        self.supabase.auth.sign_in_with_password(
-            {"email": sb_email, "password": sb_password}
-        )
-
-    def sign_out(self) -> None:
-        """
-        Sign out of Supbase and shut down
-        :return: None
-        """
-        self.supabase.auth.sign_out()
+        self.stop_queue_processing()
+        self.supabase.sign_out()
         sys.exit()
 
     def fetch_repo(self, body) -> Repo:
@@ -218,7 +107,11 @@ class PurrWorker:
         repo: Repo = self.fetch_repo(task.body)
 
         # 2. get asset dna from edge function
-        res = self.supabase.functions.invoke(
+        # res = self.supabase.functions.invoke(
+        #     task.body.suite,
+        #     invoke_options={"body": {"asset": task.body.asset}},
+        # )
+        res = self.supabase.invoke_function(
             task.body.suite,
             invoke_options={"body": {"asset": task.body.asset}},
         )
@@ -226,6 +119,9 @@ class PurrWorker:
 
         # 3. define a batch of tasks
         tasks = batcher(task.body, dna, repo)
+        if not tasks:
+            print("nothing here, man")
+            return "nothing here"
 
         # 4. enqueue batch of tasks (and get ids from return)
         upres = self.supabase.table("task").upsert(tasks).execute()
@@ -244,7 +140,7 @@ class PurrWorker:
         self.supabase.table("batch_ledger").upsert(ledgers).execute()
 
         # 6. remove this task
-        self.manage_task(task.id)
+        self.task_manager.manage_task(task.id)
 
     ###########################################################################
 
@@ -262,13 +158,13 @@ class PurrWorker:
         loader(task.body, repo)
 
         # 3. remove task from task table
-        self.manage_task(task.id)
+        self.task_manager.manage_task(task.id)
 
         # 4. remove batch/task combo from batch_ledger
-        self.manage_asset_batch(task.id, task.body.batch_id)
+        self.task_manager.manage_asset_batch(task.id, task.body.batch_id)
 
         # 5. check if the whole batch is done
-        done = self.is_batch_finished(task.body.batch_id)
+        done = self.task_manager.is_batch_finished(task.body.batch_id)
         if done:
             print("loader is really done DONE")
 
@@ -290,25 +186,30 @@ class PurrWorker:
         self.supabase.table("repo").upsert(repos).execute()
 
         # 3. remove this task
-        self.manage_task(task.id)
+        self.task_manager.manage_task(task.id)
 
         for repo in repos:
             logger.info("RECON identified repo: " + repo["fs_path"])
 
     ###########################################################################
     def handle_search(self, task):
-
+        """
+        This task parses search terms to run FTS queries on local postgres asset
+        tables. Search results are written to the supabase search_result table
+        and linked to the user's search via the search_id and user_id.
+        It's a submit -> queue -> publish -> subscribe flow.
+        :param task: An instance of SearchTask
+        :return: TODO
+        """
         res = search_local_pg(self.supabase, task.body)
-        # make_asset_fts_queries(task.body)
-        print("HANDLE_SEARCH!!!!!!!!!!!!!!!!!!!!!")
-        print(res)
+        # print(res)
 
     ###########################################################################
 
     @basic_log
     def task_handler(self, task):
 
-        self.manage_task(task.id, "PROCESSING")
+        self.task_manager.manage_task(task.id, "PROCESSING")
 
         match task.directive:
             case "batcher":
@@ -335,7 +236,7 @@ class PurrWorker:
 
         # self.sign_out()
 
-    def listen(self):
+    def listen(self) -> None:
         self.socket.connect()
         channel = self.socket.set_channel("realtime:public:task")
 
@@ -355,3 +256,17 @@ class PurrWorker:
     # @staticmethod
     # def say(x="nobody"):
     #     print("Hello World! ", x)
+
+
+def init_socket() -> Socket:
+    """
+    Initialize supabase realtime socket from .env. Project details are from:
+    supabase.com/dashboard/<project>/settings/api
+    :return: A realtime.connection Socket
+    """
+    sb_key: str = os.environ.get("SUPABASE_KEY")
+    sb_id: str = os.environ.get("SUPABASE_ID")
+    socket_url = (
+        f"wss://{sb_id}.supabase.co/realtime/v1/websocket?apikey={sb_key}&vsn=1.0.0"
+    )
+    return Socket(socket_url, auto_reconnect=True)

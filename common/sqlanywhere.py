@@ -1,12 +1,11 @@
-from typing import List, Dict
-import re
 import pyodbc
 import os
+import re
 from retry import retry
 from common.util import normalize_path
 from common.typeish import SQLAnywhereConn
 
-# from .logger import basic_log
+from typing import List, Dict, Any
 
 
 class RetryException(Exception):
@@ -15,15 +14,25 @@ class RetryException(Exception):
 
 # @basic_log
 @retry(RetryException, tries=5)
-def db_exec(conn: dict | SQLAnywhereConn, sql: List[str] or str):
-    """Connect to SQLAnywhere and Run SQL commands from str or list.
+def db_exec(
+    conn: dict | SQLAnywhereConn, sql: List[str] or str
+) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
+    """
+    Connect to SQLAnywhere and Run SQL commands from str or list.
     Results are returned as {desc: (column description), rows: (list of rows)}.
     If sql is a single string, a single result dict is returned.
     If sql is a list of commands, results will be a list of dicts.
+
     If the gxdb.db file (conn['dbf']) is in use, exclude 'dbf' and retry to
     connect to an already-running database. This only works if params['dbn']
     exactly matches the name used by whatever process has the gxdb opened.
-    check in dbisql: select db_name( number ) from sa_db_list();
+
+    Check active connections in dbisql via:
+        select db_name( number ) from sa_db_list();
+
+    :param conn: A SQLAnywhereConn object or equivalent dict
+    :param sql: A single or list of SQL statements to run
+    :return: dict or list of dicts, depending on the provided sql
     """
 
     if type(conn) is SQLAnywhereConn:
@@ -77,8 +86,12 @@ def db_exec(conn: dict | SQLAnywhereConn, sql: List[str] or str):
         #     connection.close()
 
 
-def make_conn_params(repo_path: str, host: str):
-    """doc"""
+def make_conn_params(repo_path: str, host: str) -> dict:
+    """
+    :param repo_path: File path to the GeoGraphix project containing gxdb.db
+    :param host: Ideally, this is the GeoGraphix project server's hostname
+    :return: a dict containing SQLAnywhere connection parameters
+    """
     ggx_host = host or "localhost"
     fs_path = normalize_path(repo_path)
     name = fs_path.split("/")[-1]

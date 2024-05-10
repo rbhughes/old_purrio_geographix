@@ -1,12 +1,22 @@
-import socket
 import hashlib
-import time
-from functools import wraps
-from datetime import datetime
 import os
+import socket
+import time
+from datetime import datetime
+from functools import wraps
+
+from typing import Callable
 
 
-def timer(func):
+def timer(func) -> Callable:
+    """
+    A wrapped timer that simply prints start/end elapsed execution time. Ex:
+    [handle_search START: 2024-04-26 10:12:24]
+    [handle_search END: 2024-04-26 10:12:25] ~ 0.89 seconds, 0.01 minutes
+    :param func: any function, apply @timer decorator
+    :return: None
+    """
+
     @wraps(func)
     def timer_wrapper(*args, **kwargs):
         t0 = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -23,15 +33,34 @@ def timer(func):
     return timer_wrapper
 
 
-def hostname():
+def hostname() -> str:
+    """
+    Just print this PC's lowercase hostname
+    :return: A hostname string
+    """
     return socket.gethostname().lower()
 
 
-def hashify(s: str):
+def hashify(s: str) -> str:
+    """
+    Return an MD5 hash on any string
+    :param s: Any input string
+    :return: md5 hash
+    """
     return hashlib.md5(s.lower().encode()).hexdigest()
 
 
-def merge_nested_dict(a: dict, b: dict, path=None):
+def merge_nested_dict(a: dict, b: dict, path=None) -> dict:
+    """
+    Merge two dictionaries (b into a), handling nested dictionaries by
+    recursively merging their values. If there are conflicts between leaf values
+    (i.e., non-dictionary values) at the same path in a and b, it prints a
+    message indicating the conflict.
+    :param a: Any dict (the parent?)
+    :param b: Any dict (the child?)
+    :param path: An optional
+    :return: a single merged dict
+    """
     """merges b into a"""
     if path is None:
         path = []
@@ -48,15 +77,31 @@ def merge_nested_dict(a: dict, b: dict, path=None):
     return a
 
 
-def dir_exists(fs_path: str):
+def dir_exists(fs_path: str) -> bool:
+    """
+    Is the supplied path a valid directory from the context of this PC and user?
+    :param fs_path: A file path
+    :return: True if valid
+    """
     return os.path.isdir(fs_path)
 
 
-def normalize_path(fs_path: str):
+def normalize_path(fs_path: str) -> str:
+    """
+    Assuming the string is a valid path, replace all backslashes with forward
+    slashes. This avoids the double-escape madness on UNC paths. Windows can
+    usually resolve forward slash UNCs like: //server/share/path
+    :param fs_path: Any path string
+    :return: path with forward slashes
+    """
     return fs_path.replace("\\", "/")
 
 
-def local_pg_params():
+def local_pg_params() -> dict:
+    """
+    Default params for the local instance of PostgreSQL. Password is in .env
+    :return: dict of connection parameters
+    """
     return {
         "user": "postgres",
         "host": "localhost",
@@ -64,3 +109,7 @@ def local_pg_params():
         "password": os.environ.get("LOCAL_PG_PASS"),
         "port": 5432,
     }
+
+
+class RetryException(Exception):
+    """Just a trigger to catch JWT expired exception"""

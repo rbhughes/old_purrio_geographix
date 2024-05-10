@@ -64,6 +64,8 @@ class LoaderTaskBody:
     batch_id: str
     conn: SQLAnywhereConn
     prefixes: Dict[str, str]
+    purr_delimiter: Optional[str]
+    purr_null: Optional[str]
     repo_id: str
     repo_name: str
     selector: str

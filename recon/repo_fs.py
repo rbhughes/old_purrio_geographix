@@ -1,16 +1,23 @@
-import os
 import glob
-from subprocess import run
-from common.util import hostname, hashify
+import os
 import re
 from datetime import datetime
-from common.util import normalize_path
+from subprocess import run
+from common.util import normalize_path, hostname, hashify
 from common.sqlanywhere import make_conn_params
+
+from typing import List
 
 DUPATH = "bin/du64.exe"
 
 
-def is_ggx_project(maybe: str):
+def is_ggx_project(maybe: str) -> bool:
+    """
+    A basic file/folder structure test to determine if a directory looks like a
+    geographix project. Assumes a healthy structure.
+    :param maybe: Any directory path
+    :return: True if input path looks like a repo directory
+    """
     gxdb = os.path.join(maybe, "gxdb.db")
     gxdb_prod = os.path.join(maybe, "gxdb_production.db")
     global_aoi = os.path.join(maybe, "Global")
@@ -19,7 +26,7 @@ def is_ggx_project(maybe: str):
     )
 
 
-def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}"):
+def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[str]:
     repo_list = []
     hits = glob.glob(os.path.join(recon_root, "**/gxdb.db"), recursive=True)
     for hit in hits:
@@ -39,8 +46,13 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}"):
     return repo_list
 
 
-def dir_stats(repo_base):
-    """https://learn.microsoft.com/en-us/sysinternals/downloads/du"""
+def dir_stats(repo_base) -> dict:
+    """
+    https://learn.microsoft.com/en-us/sysinternals/downloads/du
+    Run microsoft's du utility to collect directory size. Faster than python.
+    :param repo_base: A stub repo dict. We just use the fs_path
+    :return: dict of parsed stdout byte sizes
+    """
     res = run(
         [DUPATH, "-q", "-nobanner", repo_base["fs_path"]],
         capture_output=True,
@@ -61,7 +73,15 @@ def dir_stats(repo_base):
     return meta
 
 
-def repo_mod(repo_base):
+def repo_mod(repo_base) -> dict:
+    """
+    Recursively traverse project folders to determine the most recently modified
+    project file date. We exclude SQLAnywhere, since the act of connecting to it
+    will update the mod dates. No, this is not performant.
+    TODO: optimize this
+    :param repo_base: A stub repo dict. We just use the fs_path
+    :return: dict with repo_mode date
+    """
     last_mod = datetime(1970, 1, 1)
 
     def traverse(dir_path: str):

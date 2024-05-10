@@ -1,17 +1,24 @@
-from common.sqlanywhere import db_exec
-from common.util import hashify, local_pg_params
-import simplejson as json
 import psycopg2
 import psycopg2.extras
-import os
+import simplejson as json
 
+from common.sqlanywhere import db_exec
+from common.util import hashify, local_pg_params
 from asset.xformer import xformer
+
+from typing import List
 
 
 ASSET_COLUMNS = ["id", "repo_id", "repo_name", "well_id", "suite", "tag", "doc"]
 
 
-def make_upsert_stmt(table_name, columns):
+def make_upsert_stmt(table_name, columns) -> str:
+    """
+    Construct a PostgreSQL "upsert" statement for collected asset data
+    :param table_name: The asset/table-name (they match)
+    :param columns: Usually just ASSET_COLUMNS
+    :return: a SQL string
+    """
     cols = columns.copy()
     stmt = [f"INSERT INTO {table_name}"]
     stmt.append(f"({', '.join(columns)})")
@@ -24,7 +31,14 @@ def make_upsert_stmt(table_name, columns):
     return " ".join(stmt)
 
 
-def pg_upserter(docs, table_name):
+def pg_upserter(docs, table_name) -> None:
+    """
+    Upsert asset data to local PostgreSQL database. Each asset type has its own
+    table, but the columns are identical.
+    :param docs: A list of dicts containing json documents
+    :param table_name: A str of the asset/table name (they match)
+    :return: TODO
+    """
     conn = None
     cursor = None
     try:
@@ -58,7 +72,14 @@ def pg_upserter(docs, table_name):
         # return "potato salad"
 
 
-def compose_docs(data, body):
+def compose_docs(data, body) -> List[dict]:
+    """
+    A "document" (doc) is basically a json object defined for each specific
+    asset by Supabase edge functions.
+    :param data: Basically a list (result set) from SQLAnywhere
+    :param body: The LoaderTask body, mostly used for metadata
+    :return: List of docs
+    """
     docs = []
 
     for row in data:
@@ -83,7 +104,17 @@ def compose_docs(data, body):
         for col, xf in body.xforms.items():
             data_type = xf.get("ts_type")
             func_name = xf.get("xform")
-            xform_args = (func_name, row, col, data_type, None)
+            purr_delimiter = body.purr_delimiter
+            purr_null = body.purr_null
+            xform_args = (
+                func_name,
+                row,
+                col,
+                data_type,
+                None,
+                purr_delimiter,
+                purr_null,
+            )
             row[col] = xformer(xform_args)
 
         # build json based on prefixes
@@ -94,12 +125,20 @@ def compose_docs(data, body):
                     new_key = key.replace(f"{prefix}", "", 1)
                     doc[table][new_key] = val
         o["doc"] = doc
+
         docs.append(o)
 
+    # print(json.dumps(docs[0], indent=4))
     return docs
 
 
 def loader(body, repo):
+    """
+    Main entry point for the loader/upserter
+    :param body: An instance of LoaderTask
+    :param repo: An instance of Repo
+    :return: TODO
+    """
 
     try:
         data = db_exec(repo.conn, body.selector)

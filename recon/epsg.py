@@ -1725,12 +1725,22 @@ projections = [
 
 
 def scrub(s: str) -> str:
+    """
+    Utility method to (slightly) clean up display text
+    :param s: input string
+    :return: sanitized string
+    """
     underscored = re.sub(r"[ ./_]", "_", str(s))
     return re.sub(r"[-()]", "", underscored)
 
 
-def get_wkts(fs_path: str):
-    """doc"""
+def get_wkts(fs_path: str) -> dict:
+    """
+    Extract storage and display string "Well Known Text" from GeoGraphix
+    Project.ggx.xml files. Very old projects won't have the .xml file.
+    :param fs_path: Path to project repo
+    :return: storage and display WKT
+    """
     ggx_xml = os.path.join(fs_path, "Project.ggx.xml")
     root = ET.parse(ggx_xml).getroot()
 
@@ -1743,8 +1753,12 @@ def get_wkts(fs_path: str):
     }
 
 
-def epsg_codes(repo_base):
-    """doc"""
+def epsg_codes(repo_base) -> dict:
+    """
+    Look up storage and display EPSG code and name. Mostly based on epsg.io
+    :param repo_base: A stub repo dict. We just use the fs_path
+    :return: ESPG names and codes
+    """
 
     storage_epsg = 0
     storage_name = "unknown"

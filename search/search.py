@@ -2,7 +2,6 @@ import psycopg2
 import re
 
 from psycopg2 import sql
-
 from common.typeish import SearchTaskBody
 from common.util import local_pg_params
 

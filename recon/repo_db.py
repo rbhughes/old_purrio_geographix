@@ -60,8 +60,15 @@ WELLS_WITH_VECTOR_LOG = "SELECT COUNT(DISTINCT wellid) AS tally FROM gx_well_cur
 WELLS_WITH_ZONE = "SELECT COUNT(DISTINCT uwi) AS tally FROM well_zone_interval"
 
 
-def well_counts(repo_base):
-    """doc"""
+def well_counts(repo_base) -> dict:
+    """
+    Run a bunch of SQL counts for wells having each data type. Note that this
+    is well-centric. For example, it's wells with raster logs, not a count of
+    raster logs.
+    :param repo_base: A stub repo dict. We just use the fs_path
+    :return: dict with each count, named after the keys below
+    """
+
     counter_sql = {
         "well_count": WELLS,
         "wells_with_completion": WELLS_WITH_COMPLETION,
@@ -87,7 +94,13 @@ def well_counts(repo_base):
     return counts
 
 
-def hull_outline(repo_base):
+def hull_outline(repo_base) -> dict:
+    """
+    https://concave-hull.readthedocs.io/en/latest/
+    Note: we add a point to connect the last dot
+    :param repo_base: A stub repo dict. We just use the fs_path
+    :return: dict with hull (List of points)
+    """
     res = db_exec(repo_base["conn"], NOTNULL_LONLAT)
     points = [[r["surface_longitude"], r["surface_latitude"]] for r in res]
 

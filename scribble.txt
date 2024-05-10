@@ -1,6 +1,10 @@
 add venv to vscode: shift + ctrl + p (type python)
 
+# initialize python in terminal
+.venv\Scripts\activate
+
 pip install -r .\requirements.txt
+
 
 # run in "module mode" (to avoid import hell)
 python -m client
@@ -8,6 +12,10 @@ python -m client
 # to use system clipboard in pycharm:
 create c:\users\bryan\.ideavimrc
 containing this line: set clipboard+=unnamed
+
+
+pip list --outdated
+pip install <package> --upgrade
 
 
 # this mess didn't work, but shows some async techniques:
