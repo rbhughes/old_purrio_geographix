@@ -4,6 +4,7 @@ import socket
 import time
 from datetime import datetime
 from functools import wraps
+from realtime.connection import Socket
 
 from typing import Callable
 
@@ -109,6 +110,20 @@ def local_pg_params() -> dict:
         "password": os.environ.get("LOCAL_PG_PASS"),
         "port": 5432,
     }
+
+
+def init_socket() -> Socket:
+    """
+    Initialize supabase realtime socket from .env. Project details are from:
+    supabase.com/dashboard/<project>/settings/api
+    :return: A realtime.connection Socket
+    """
+    sb_key: str = os.environ.get("SUPABASE_KEY")
+    sb_id: str = os.environ.get("SUPABASE_ID")
+    socket_url = (
+        f"wss://{sb_id}.supabase.co/realtime/v1/websocket?apikey={sb_key}&vsn=1.0.0"
+    )
+    return Socket(socket_url, auto_reconnect=True)
 
 
 class RetryException(Exception):

@@ -5,8 +5,8 @@ from typing import Optional
 
 
 class TaskManager:
-    def __init__(self, supabase_client):
-        self.supabase = supabase_client
+    def __init__(self, sb_client):
+        self.sb_client = sb_client
 
     @retry(RetryException, tries=2)
     def manage_task(self, task_id: int, status: Optional[str] = None) -> None:
@@ -21,10 +21,10 @@ class TaskManager:
         """
         try:
             if status is None:
-                self.supabase.table("task").delete().eq("id", task_id).execute()
+                self.sb_client.table("task").delete().eq("id", task_id).execute()
             elif status in ("PROCESSING", "FAILED"):
                 (
-                    self.supabase.table("task")
+                    self.sb_client.table("task")
                     .update({"status": status})
                     .eq("id", task_id)
                     .execute()
@@ -32,7 +32,7 @@ class TaskManager:
         except Exception as err:
             if re.search("JWT expired", str(err)):
                 print("Session JWT expired. Retrying after sign-in...")
-                self.supabase.sign_in()
+                self.sb_client.sign_in()
                 raise RetryException from err
             else:
                 raise err
@@ -49,7 +49,7 @@ class TaskManager:
         """
         if status is None:
             (
-                self.supabase.table("batch_ledger")
+                self.sb_client.table("batch_ledger")
                 .delete()
                 .eq("batch_id", batch_id)
                 .eq("task_id", task_id)
@@ -57,7 +57,7 @@ class TaskManager:
             )
         else:
             (
-                self.supabase.table("batch_ledger")
+                self.sb_client.table("batch_ledger")
                 .update({"status": status})
                 .eq("batch_id", batch_id)
                 .eq("task_id", task_id)
@@ -76,7 +76,7 @@ class TaskManager:
         # https://anand2312.github.io/pgrest/reference/builders/
         # noinspection PyTypeChecker
         res = (
-            self.supabase.table("batch_ledger")
+            self.sb_client.table("batch_ledger")
             .select("*", count="exact")
             .eq("batch_id", batch_id)
             .execute()

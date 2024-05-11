@@ -19,6 +19,18 @@ class SQLAnywhereConn:
         return asdict(self)
 
 
+@dataclass
+class Message:
+    user_id: str
+    worker: str
+    data: Optional[str] = None
+    directive: Optional[str] = None
+    repo_id: Optional[str] = None
+
+    def to_dict(self):
+        return asdict(self)
+
+
 # BATCHER #####################################################################
 
 
@@ -169,8 +181,6 @@ class Repo:
 
 
 # SEARCH ######################################################################
-
-
 @dataclass
 class SearchTaskBody:
     tag: str
@@ -244,8 +254,27 @@ def is_valid_status(status: str):
     return status.upper() in valid_statuses
 
 
-def validate_task(payload: dict):
+def validate_message(payload: dict):
+    try:
+        return Message(
+            user_id=payload["user_id"],
+            worker=payload["worker"],
+            data=payload["data"],
+            directive=payload["directive"],
+            repo_id=payload["repo_id"],
+        )
 
+    except KeyError as ke:
+        print(ke)
+        return None
+
+
+def validate_task(payload: dict):
+    """
+    Convert json payloads into their dataclass analog
+    :param payload:
+    :return:
+    """
     try:
         if payload["record"]:
             if "status" in payload["record"] and not is_valid_status(

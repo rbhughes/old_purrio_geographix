@@ -16,6 +16,10 @@ class SupabaseClient:
             {"email": sb_email, "password": sb_password}
         )
 
+    def user_id(self):
+        res = self.client.auth.get_user()
+        return res.user.id
+
     def sign_out(self):
         self.client.auth.sign_out()
 

@@ -4,19 +4,20 @@ import simplejson as json
 import sys
 import threading
 from dotenv import load_dotenv
-from realtime.connection import Socket
 
 from asset.batcher import batcher
 from asset.loader import loader
 from common.logger import setup_logging, basic_log
 from common.sb_client import SupabaseClient
+from common.messenger import Messenger
 from common.queue_manager import QueueManager
 from common.task_manager import TaskManager
 from common.typeish import validate_task, validate_repo, Repo
+from common.util import init_socket
 from recon.recon import repo_recon
 from search.search import search_local_pg
 
-from typing import Dict, List, Any
+from typing import Any, Callable, Dict, List
 
 
 load_dotenv()
@@ -30,8 +31,11 @@ class PurrWorker:
     """
 
     def __init__(self) -> None:
-        self.supabase = SupabaseClient()
-        self.task_manager = TaskManager(self.supabase)
+        self.sb_client = SupabaseClient()
+        self.task_manager = TaskManager(self.sb_client)
+        self.messenger = Messenger(self.sb_client)
+
+        # print(self.supabase.user_id())
 
         work_max_workers = int(os.environ.get("WORK_MAX_WORKERS"))
         self.work_queue = QueueManager(work_max_workers)
@@ -79,7 +83,7 @@ class PurrWorker:
         :return: None
         """
         self.stop_queue_processing()
-        self.supabase.sign_out()
+        self.sb_client.sign_out()
         sys.exit()
 
     def fetch_repo(self, body) -> Repo:
@@ -88,7 +92,7 @@ class PurrWorker:
         :param body: The batcher and loader task body contains repo_id
         :return: an instance of Repo
         """
-        res = self.supabase.table("repo").select("*").eq("id", body.repo_id).execute()
+        res = self.sb_client.table("repo").select("*").eq("id", body.repo_id).execute()
         repo = validate_repo((res.data[0]))
         return repo
 
@@ -111,7 +115,7 @@ class PurrWorker:
         #     task.body.suite,
         #     invoke_options={"body": {"asset": task.body.asset}},
         # )
-        res = self.supabase.invoke_function(
+        res = self.sb_client.invoke_function(
             task.body.suite,
             invoke_options={"body": {"asset": task.body.asset}},
         )
@@ -124,7 +128,7 @@ class PurrWorker:
             return "nothing here"
 
         # 4. enqueue batch of tasks (and get ids from return)
-        upres = self.supabase.table("task").upsert(tasks).execute()
+        upres = self.sb_client.table("task").upsert(tasks).execute()
 
         # 5. update batch ledger too
         ledgers = [
@@ -137,7 +141,7 @@ class PurrWorker:
             }
             for batch_task in upres.data
         ]
-        self.supabase.table("batch_ledger").upsert(ledgers).execute()
+        self.sb_client.table("batch_ledger").upsert(ledgers).execute()
 
         # 6. remove this task
         self.task_manager.manage_task(task.id)
@@ -183,12 +187,19 @@ class PurrWorker:
         repos: List[Dict[str, Any]] = repo_recon(task.body)
 
         # 2. write repos to repo table
-        self.supabase.table("repo").upsert(repos).execute()
+        self.sb_client.table("repo").upsert(repos).execute()
 
         # 3. remove this task
         self.task_manager.manage_task(task.id)
 
         for repo in repos:
+            self.messenger.send(
+                {
+                    "directive": "blah",
+                    "repo_id": repo["id"],
+                    "data": "RECON identified repo: " + repo["fs_path"],
+                }
+            )
             logger.info("RECON identified repo: " + repo["fs_path"])
 
     ###########################################################################
@@ -201,38 +212,35 @@ class PurrWorker:
         :param task: An instance of SearchTask
         :return: TODO
         """
-        res = search_local_pg(self.supabase, task.body)
+        res = search_local_pg(self.sb_client, task.body)
         # print(res)
 
     ###########################################################################
 
     @basic_log
     def task_handler(self, task):
+        # task: Union[BatcherTask, LoaderTask, ReconTask, SearchTask],
+
+        task_handlers = {
+            "batcher": self.handle_batcher,
+            "loader": self.handle_loader,
+            "recon": self.handle_recon,
+            "search": self.handle_search,
+            # "stats": self.handle_stats,
+            # "halt": self.halt,
+        }
 
         self.task_manager.manage_task(task.id, "PROCESSING")
 
-        match task.directive:
-            case "batcher":
-                print("############################## batcher")
-                self.handle_batcher(task)
+        # TODO: revisit typing here
+        handler: Callable[[Any], None] = task_handlers.get(task.directive)
 
-            case "loader":
-                print("############################## loader")
-                self.handle_loader(task)
-
-            case "recon":
-                print("############################## recon")
-                self.handle_recon(task)
-
-            case "search":
-                print("############################## search")
-                self.handle_search(task)
-
-            case "stats":
-                print("############################## stats")
-
-            case "halt":
-                print("############################## halt")
+        if task.directive == "halt":
+            self.halt()
+        elif handler:
+            handler(task)
+        else:
+            print(f"Unknown task directive: {task.directive}")
 
         # self.sign_out()
 
@@ -256,17 +264,3 @@ class PurrWorker:
     # @staticmethod
     # def say(x="nobody"):
     #     print("Hello World! ", x)
-
-
-def init_socket() -> Socket:
-    """
-    Initialize supabase realtime socket from .env. Project details are from:
-    supabase.com/dashboard/<project>/settings/api
-    :return: A realtime.connection Socket
-    """
-    sb_key: str = os.environ.get("SUPABASE_KEY")
-    sb_id: str = os.environ.get("SUPABASE_ID")
-    socket_url = (
-        f"wss://{sb_id}.supabase.co/realtime/v1/websocket?apikey={sb_key}&vsn=1.0.0"
-    )
-    return Socket(socket_url, auto_reconnect=True)

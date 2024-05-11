@@ -2,14 +2,12 @@ import pyodbc
 import os
 import re
 from retry import retry
-from common.util import normalize_path
+from common.util import normalize_path, RetryException
 from common.typeish import SQLAnywhereConn
 
 from typing import List, Dict, Any
 
-
-class RetryException(Exception):
-    """Just a trigger to catch gxdb.db in use exception"""
+# TODO: make this context aware, use "with..."
 
 
 # @basic_log
