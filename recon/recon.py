@@ -16,6 +16,10 @@ def repo_recon(body) -> List[Dict[str, Any]]:
 
     repos = glob_repos(fs_path)
 
+    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+    print(repos)
+    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
+
     for repo_base in repos:
         for func in [
             well_counts,

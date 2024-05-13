@@ -6,9 +6,41 @@ from subprocess import run
 from common.util import normalize_path, hostname, hashify
 from common.sqlanywhere import make_conn_params
 
+
+# from common.logger import setup_logging, auto_log
+from common.logger import Logger
+
+# import logging
+
 from typing import List
 
+
 DUPATH = "bin/du64.exe"
+
+
+logger = Logger(__name__)
+
+# logger = logging.getLogger("purrio")
+# setup_logging("repo_fs")
+
+###
+# def print_unmatched_files(func):
+#     def wrapper(*args, **kwargs):
+#         gen = func(*args, **kwargs)
+#         try:
+#             while True:
+#                 result = next(gen)
+#                 if isinstance(result, str):
+#                     print(f"Non-matching file: {result}")
+#         except StopIteration:
+#             pass
+#         print("DDDDDDDDDDDDDDDDDDDD")
+#         print(list(gen))
+#         print("DDDDDDDDDDDDDDDDDDDD")
+#         return list(gen)
+#
+#     return wrapper
+###
 
 
 def is_ggx_project(maybe: str) -> bool:
@@ -26,13 +58,19 @@ def is_ggx_project(maybe: str) -> bool:
     )
 
 
-def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[str]:
+# @print_unmatched_files
+
+
+# @basic_log
+# @auto_log
+def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[dict]:
     repo_list = []
     hits = glob.glob(os.path.join(recon_root, "**/gxdb.db"), recursive=True)
     for hit in hits:
         maybe = os.path.dirname(hit)
         if is_ggx_project(maybe):
-            print(f".....GLOB.....{maybe}")
+            # print(f".....GLOB.....{maybe}")
+            logger.info(f".....GLOB.....{maybe}")
             repo_list.append(
                 {
                     "id": hashify(normalize_path(maybe)),
@@ -43,6 +81,13 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[str]:
                     "suite": "geographix",
                 }
             )
+        else:
+            logger.debug(f"NOT A PROJECT: {maybe}")
+            # logger.send_message(f"WHAT ARE YOU GONNA DO ABOUT {maybe}")
+    #
+    # print("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+    # print(repo_list)
+    # print("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
     return repo_list
 
 

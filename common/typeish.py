@@ -23,7 +23,7 @@ class SQLAnywhereConn:
 class Message:
     user_id: str
     worker: str
-    data: Optional[str] = None
+    data: Optional[str] = None  # actually JSON
     directive: Optional[str] = None
     repo_id: Optional[str] = None
 

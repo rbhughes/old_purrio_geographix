@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 
 from asset.batcher import batcher
 from asset.loader import loader
-from common.logger import setup_logging, basic_log
+
+# from common.auto_log import setup_logging, auto_log
 from common.sb_client import SupabaseClient
 from common.messenger import Messenger
 from common.queue_manager import QueueManager
@@ -16,13 +17,18 @@ from common.typeish import validate_task, validate_repo, Repo
 from common.util import init_socket
 from recon.recon import repo_recon
 from search.search import search_local_pg
+from common.logger import Logger
 
 from typing import Any, Callable, Dict, List
 
 
 load_dotenv()
-logger = logging.getLogger("purrio")
-setup_logging("purr_worker")
+
+logger = Logger(__name__)
+
+
+# logger = logging.getLogger("purrio")
+# setup_logging("purr_worker")
 
 
 class PurrWorker:
@@ -193,12 +199,15 @@ class PurrWorker:
         self.task_manager.manage_task(task.id)
 
         for repo in repos:
-            self.messenger.send(
-                {
-                    "directive": "blah",
-                    "repo_id": repo["id"],
-                    "data": "RECON identified repo: " + repo["fs_path"],
-                }
+            # self.messenger.send(
+            #     directive="potato",
+            #     repo_id=repo["id"],
+            #     data="RECON identified repo: " + repo["fs_path"],
+            # )
+            logger.send_message(
+                directive="dumpy",
+                repo_id=repo["id"],
+                data="RECON identified repo: " + repo["fs_path"],
             )
             logger.info("RECON identified repo: " + repo["fs_path"])
 
@@ -217,7 +226,7 @@ class PurrWorker:
 
     ###########################################################################
 
-    @basic_log
+    # @auto_log
     def task_handler(self, task):
         # task: Union[BatcherTask, LoaderTask, ReconTask, SearchTask],
 
