@@ -5,42 +5,14 @@ from datetime import datetime
 from subprocess import run
 from common.util import normalize_path, hostname, hashify
 from common.sqlanywhere import make_conn_params
-
-
-# from common.logger import setup_logging, auto_log
 from common.logger import Logger
-
-# import logging
-
 from typing import List
 
+# from common.debugger import debugger
 
 DUPATH = "bin/du64.exe"
 
-
 logger = Logger(__name__)
-
-# logger = logging.getLogger("purrio")
-# setup_logging("repo_fs")
-
-###
-# def print_unmatched_files(func):
-#     def wrapper(*args, **kwargs):
-#         gen = func(*args, **kwargs)
-#         try:
-#             while True:
-#                 result = next(gen)
-#                 if isinstance(result, str):
-#                     print(f"Non-matching file: {result}")
-#         except StopIteration:
-#             pass
-#         print("DDDDDDDDDDDDDDDDDDDD")
-#         print(list(gen))
-#         print("DDDDDDDDDDDDDDDDDDDD")
-#         return list(gen)
-#
-#     return wrapper
-###
 
 
 def is_ggx_project(maybe: str) -> bool:
@@ -58,19 +30,26 @@ def is_ggx_project(maybe: str) -> bool:
     )
 
 
-# @print_unmatched_files
-
-
-# @basic_log
-# @auto_log
+# @debugger
 def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[dict]:
+    """
+    Use glob matching to look for candidate geographix projects. This scheme is
+    faster (and simpler) than walking directory trees, but there may be some
+    native or multithreaded scheme that is better for huge filesystems.
+    :param recon_root:
+    :param ggx_host:
+    :return:
+    """
+    logger.send_message(
+        directive="note",
+        data={"note": "recursive glob search: " + recon_root},
+        workflow="recon",
+    )
     repo_list = []
     hits = glob.glob(os.path.join(recon_root, "**/gxdb.db"), recursive=True)
     for hit in hits:
         maybe = os.path.dirname(hit)
         if is_ggx_project(maybe):
-            # print(f".....GLOB.....{maybe}")
-            logger.info(f".....GLOB.....{maybe}")
             repo_list.append(
                 {
                     "id": hashify(normalize_path(maybe)),
@@ -82,12 +61,8 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[dict]:
                 }
             )
         else:
-            logger.debug(f"NOT A PROJECT: {maybe}")
-            # logger.send_message(f"WHAT ARE YOU GONNA DO ABOUT {maybe}")
-    #
-    # print("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
-    # print(repo_list)
-    # print("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR")
+            logger.warning(f"Glob match, but not a project?: {maybe}")
+
     return repo_list
 
 
@@ -98,6 +73,13 @@ def dir_stats(repo_base) -> dict:
     :param repo_base: A stub repo dict. We just use the fs_path
     :return: dict of parsed stdout byte sizes
     """
+    logger.send_message(
+        directive="note",
+        repo_id=repo_base["id"],
+        data={"note": "collecting dir stats: " + repo_base["fs_path"]},
+        workflow="recon",
+    )
+
     res = run(
         [DUPATH, "-q", "-nobanner", repo_base["fs_path"]],
         capture_output=True,
@@ -127,6 +109,13 @@ def repo_mod(repo_base) -> dict:
     :param repo_base: A stub repo dict. We just use the fs_path
     :return: dict with repo_mode date
     """
+    logger.send_message(
+        directive="note",
+        repo_id=repo_base["id"],
+        data={"note": "calculating repo mod: " + repo_base["fs_path"]},
+        workflow="recon",
+    )
+
     last_mod = datetime(1970, 1, 1)
 
     def traverse(dir_path: str):

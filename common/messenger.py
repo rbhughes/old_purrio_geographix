@@ -17,13 +17,14 @@ class Messenger:
     #         print(e)
     #         print("!!!!!!!!!!!!!!!!!!!!!!")
 
-    def send(self, directive, repo_id=None, data=None):
+    def send(self, directive, repo_id=None, data=None, workflow=None):
         message = {
             "user_id": self.user_id,
             "worker": hostname(),
             "directive": directive,
             "repo_id": repo_id,
             "data": data,
+            "workflow": workflow,
         }
         msg: Message = validate_message(message)
         try:

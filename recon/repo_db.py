@@ -1,5 +1,8 @@
 from common.sqlanywhere import db_exec
+from common.logger import Logger
 from concave_hull import concave_hull
+
+# from common.debugger import debugger
 
 NOTNULL_LONLAT = (
     "SELECT surface_longitude, surface_latitude FROM well "
@@ -59,6 +62,8 @@ WELLS_WITH_VECTOR_LOG = "SELECT COUNT(DISTINCT wellid) AS tally FROM gx_well_cur
 
 WELLS_WITH_ZONE = "SELECT COUNT(DISTINCT uwi) AS tally FROM well_zone_interval"
 
+logger = Logger(__name__)
+
 
 def well_counts(repo_base) -> dict:
     """
@@ -68,6 +73,12 @@ def well_counts(repo_base) -> dict:
     :param repo_base: A stub repo dict. We just use the fs_path
     :return: dict with each count, named after the keys below
     """
+    logger.send_message(
+        directive="note",
+        repo_id=repo_base["id"],
+        data={"note": "collecting well counts: " + repo_base["fs_path"]},
+        workflow="recon",
+    )
 
     counter_sql = {
         "well_count": WELLS,
@@ -101,6 +112,13 @@ def hull_outline(repo_base) -> dict:
     :param repo_base: A stub repo dict. We just use the fs_path
     :return: dict with hull (List of points)
     """
+    logger.send_message(
+        directive="note",
+        repo_id=repo_base["id"],
+        data={"note": "building hull outline: " + repo_base["fs_path"]},
+        workflow="recon",
+    )
+
     res = db_exec(repo_base["conn"], NOTNULL_LONLAT)
     points = [[r["surface_longitude"], r["surface_latitude"]] for r in res]
 

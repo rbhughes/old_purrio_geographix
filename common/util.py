@@ -2,6 +2,7 @@ import hashlib
 import os
 import socket
 import time
+import simplejson as json
 from datetime import datetime
 from functools import wraps
 from realtime.connection import Socket
@@ -124,6 +125,14 @@ def init_socket() -> Socket:
         f"wss://{sb_id}.supabase.co/realtime/v1/websocket?apikey={sb_key}&vsn=1.0.0"
     )
     return Socket(socket_url, auto_reconnect=True)
+
+
+def is_valid_json(my_json_string):
+    try:
+        json.loads(my_json_string)
+        return True
+    except json.JSONDecodeError:
+        return False
 
 
 class RetryException(Exception):

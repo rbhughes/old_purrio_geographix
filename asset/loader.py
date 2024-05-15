@@ -2,11 +2,14 @@ import psycopg2
 import psycopg2.extras
 import simplejson as json
 
+from common.logger import Logger
 from common.sqlanywhere import db_exec
 from common.util import hashify, local_pg_params
 from asset.xformer import xformer
 
 from typing import List
+
+logger = Logger(__name__)
 
 
 ASSET_COLUMNS = ["id", "repo_id", "repo_name", "well_id", "suite", "tag", "doc"]
@@ -58,7 +61,12 @@ def pg_upserter(docs, table_name) -> None:
 
         conn.commit()
 
-        print(f"Successful upsert: {upsert_count} of {len(docs)} {table_name}")
+        logger.send_message(
+            directive="note",
+            # repo_id=repo.id,
+            data={"note": f"upsert: {upsert_count} of {len(docs)} {table_name}"},
+            workflow="load",
+        )
 
     except (Exception, psycopg2.Error) as error:
         print(error)
@@ -141,11 +149,26 @@ def loader(body, repo):
     """
 
     try:
+
+        logger.send_message(
+            directive="note",
+            repo_id=repo.id,
+            data={"note": f"building {body.asset} loader query" + repo.fs_path},
+            workflow="load",
+        )
+
         data = db_exec(repo.conn, body.selector)
-        # print(res)
         docs = compose_docs(data, body)
+
+        logger.send_message(
+            directive="note",
+            repo_id=repo.id,
+            data={"note": f"composed {len(docs)} {body.asset} docs" + repo.fs_path},
+            workflow="load",
+        )
+
         # print(json.dumps(docs, indent=2))
-        res = pg_upserter(docs, body.asset)
+        pg_upserter(docs, body.asset)
 
     except Exception as e:
         print(e)

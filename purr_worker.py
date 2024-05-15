@@ -1,4 +1,3 @@
-import logging
 import os
 import simplejson as json
 import sys
@@ -21,14 +20,8 @@ from common.logger import Logger
 
 from typing import Any, Callable, Dict, List
 
-
 load_dotenv()
-
 logger = Logger(__name__)
-
-
-# logger = logging.getLogger("purrio")
-# setup_logging("purr_worker")
 
 
 class PurrWorker:
@@ -113,14 +106,14 @@ class PurrWorker:
         :param task: An instance of BatcherTask
         :return: TODO
         """
+
+        # 0. notify client of job/task start
+        logger.send_message(directive="busy", data={"job_id": task.id})
+
         # 1. get associated repo
         repo: Repo = self.fetch_repo(task.body)
 
         # 2. get asset dna from edge function
-        # res = self.supabase.functions.invoke(
-        #     task.body.suite,
-        #     invoke_options={"body": {"asset": task.body.asset}},
-        # )
         res = self.sb_client.invoke_function(
             task.body.suite,
             invoke_options={"body": {"asset": task.body.asset}},
@@ -152,6 +145,18 @@ class PurrWorker:
         # 6. remove this task
         self.task_manager.manage_task(task.id)
 
+        logger.send_message(
+            directive="note",
+            repo_id=repo.id,
+            data={"note": f"batcher tasks: {len(tasks)}: " + repo.fs_path},
+            workflow="load",
+        )
+
+        # 7. notify client of job/task end
+        logger.send_message(directive="done", data={"job_id": task.id})
+
+        return True
+
     ###########################################################################
 
     def handle_loader(self, task):
@@ -161,6 +166,10 @@ class PurrWorker:
         :param task: An instance of LoaderTask
         :return: TODO
         """
+
+        # 0. notify client of job/task start
+        logger.send_message(directive="busy", data={"job_id": task.body.batch_id})
+
         # 1. get associated repo
         repo = self.fetch_repo(task.body)
 
@@ -175,8 +184,12 @@ class PurrWorker:
 
         # 5. check if the whole batch is done
         done = self.task_manager.is_batch_finished(task.body.batch_id)
+
         if done:
-            print("loader is really done DONE")
+            # 6. notify client of job/task end
+            logger.send_message(directive="done", data={"job_id": task.body.batch_id})
+
+            return True
 
     ###########################################################################
 
@@ -189,6 +202,10 @@ class PurrWorker:
         :param task: An instance of ReconTask
         :return: TODO
         """
+
+        # 0. notify client of job/task start
+        logger.send_message(directive="busy", data={"job_id": task.id})
+
         # 1. run repo_recon (returned as dicts for supabase)
         repos: List[Dict[str, Any]] = repo_recon(task.body)
 
@@ -199,17 +216,17 @@ class PurrWorker:
         self.task_manager.manage_task(task.id)
 
         for repo in repos:
-            # self.messenger.send(
-            #     directive="potato",
-            #     repo_id=repo["id"],
-            #     data="RECON identified repo: " + repo["fs_path"],
-            # )
             logger.send_message(
-                directive="dumpy",
+                directive="note",
                 repo_id=repo["id"],
-                data="RECON identified repo: " + repo["fs_path"],
+                data={"note": "added repo: " + repo["fs_path"]},
+                workflow="recon",
             )
-            logger.info("RECON identified repo: " + repo["fs_path"])
+
+        # 4. notify client of job/task end
+        logger.send_message(directive="done", data={"job_id": task.id})
+
+        return True
 
     ###########################################################################
     def handle_search(self, task):
@@ -221,14 +238,21 @@ class PurrWorker:
         :param task: An instance of SearchTask
         :return: TODO
         """
-        res = search_local_pg(self.sb_client, task.body)
-        # print(res)
+        # 0. notify client of job/task start
+        logger.send_message(directive="busy", data={"job_id": task.id})
+
+        search_local_pg(self.sb_client, task.body)
+
+        # 4. notify client of job/task end
+        logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
 
     # @auto_log
     def task_handler(self, task):
-        # task: Union[BatcherTask, LoaderTask, ReconTask, SearchTask],
+
+        # logger.send_message(directive="busy", data=json.dumps({"task_id": task.id}))
+        # logger.send_message(directive="busy", data={"task_id": task.id})
 
         task_handlers = {
             "batcher": self.handle_batcher,
@@ -247,7 +271,13 @@ class PurrWorker:
         if task.directive == "halt":
             self.halt()
         elif handler:
-            handler(task)
+            try:
+                handler(task)
+            except Exception as error:
+                logger.exception(error)
+            finally:
+                # probably needless cleanup
+                self.task_manager.manage_task(task.id)
         else:
             print(f"Unknown task directive: {task.directive}")
 
@@ -259,7 +289,9 @@ class PurrWorker:
 
         def pluck(payload):
             task = validate_task(payload)
+
             if task:
+                logger.debug(f"plucked {task.directive} task from queue")
                 if task.directive == "search":
                     self.add_to_search_queue(task)
                 else:

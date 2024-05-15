@@ -1,9 +1,10 @@
 import simplejson as json
+from common.logger import Logger
 from common.sqlanywhere import db_exec
 from common.util import hashify, hostname
-
-
 from typing import List
+
+logger = Logger(__name__)
 
 
 def batch_selector(args) -> List[str]:
@@ -51,6 +52,13 @@ def batcher(body, dna, repo) -> List[dict]:
     :param repo: The target project
     :return: A list of loader task defintions to be enqueued
     """
+
+    logger.send_message(
+        directive="note",
+        repo_id=repo.id,
+        data={"note": f"define batcher tasks: {body.asset}: " + repo.fs_path},
+        workflow="load",
+    )
 
     # dna...
     select: str = dna.get("select")

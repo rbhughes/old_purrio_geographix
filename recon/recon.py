@@ -5,6 +5,8 @@ from common.util import normalize_path
 from common.typeish import validate_repo
 from typing import Dict, List, Any
 
+# from common.debugger import debugger
+
 
 def repo_recon(body) -> List[Dict[str, Any]]:
     """
@@ -15,10 +17,6 @@ def repo_recon(body) -> List[Dict[str, Any]]:
     fs_path = normalize_path(body.recon_root)
 
     repos = glob_repos(fs_path)
-
-    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
-    print(repos)
-    print("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
 
     for repo_base in repos:
         for func in [

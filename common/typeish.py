@@ -26,6 +26,7 @@ class Message:
     data: Optional[str] = None  # actually JSON
     directive: Optional[str] = None
     repo_id: Optional[str] = None
+    workflow: Optional[str] = None
 
     def to_dict(self):
         return asdict(self)
@@ -262,6 +263,7 @@ def validate_message(payload: dict):
             data=payload["data"],
             directive=payload["directive"],
             repo_id=payload["repo_id"],
+            workflow=payload["workflow"],
         )
 
     except KeyError as ke:

@@ -1,7 +1,9 @@
 import os
 import re
+from common.logger import Logger
 import xml.etree.ElementTree as ET
 
+logger = Logger(__name__)
 
 geodetics = [
     {"geog": "gcs_north_american_1927", "datum": "d_north_american_1927", "code": 4267},
@@ -1759,6 +1761,12 @@ def epsg_codes(repo_base) -> dict:
     :param repo_base: A stub repo dict. We just use the fs_path
     :return: ESPG names and codes
     """
+    logger.send_message(
+        directive="note",
+        repo_id=repo_base["id"],
+        data={"note": "extracting epsg codes: " + repo_base["fs_path"]},
+        workflow="recon",
+    )
 
     storage_epsg = 0
     storage_name = "unknown"
