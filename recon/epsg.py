@@ -1764,7 +1764,7 @@ def epsg_codes(repo_base) -> dict:
     logger.send_message(
         directive="note",
         repo_id=repo_base["id"],
-        data={"note": "extracting epsg codes: " + repo_base["fs_path"]},
+        data={"note": f"extracting epsg codes @ {repo_base["fs_path"]}"},
         workflow="recon",
     )
 

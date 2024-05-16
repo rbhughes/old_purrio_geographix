@@ -1,12 +1,9 @@
 import psycopg2
 import psycopg2.extras
-import simplejson as json
-
 from common.logger import Logger
 from common.sqlanywhere import db_exec
 from common.util import hashify, local_pg_params
 from asset.xformer import xformer
-
 from typing import List
 
 logger = Logger(__name__)
@@ -69,15 +66,14 @@ def pg_upserter(docs, table_name) -> None:
         )
 
     except (Exception, psycopg2.Error) as error:
-        print(error)
+        logger.exception(error)
+        logger.exception("rolling back pg_upserter transaction after exception")
         conn.rollback()
-        print(error)
 
     finally:
         if conn:
             cursor.close()
             conn.close()
-        # return "potato salad"
 
 
 def compose_docs(data, body) -> List[dict]:
@@ -153,7 +149,7 @@ def loader(body, repo):
         logger.send_message(
             directive="note",
             repo_id=repo.id,
-            data={"note": f"building {body.asset} loader query" + repo.fs_path},
+            data={"note": f"building {body.asset} loader query @ {repo.fs_path}"},
             workflow="load",
         )
 
@@ -163,12 +159,12 @@ def loader(body, repo):
         logger.send_message(
             directive="note",
             repo_id=repo.id,
-            data={"note": f"composed {len(docs)} {body.asset} docs" + repo.fs_path},
+            data={"note": f"composed {len(docs)} {body.asset} docs @ {repo.fs_path}"},
             workflow="load",
         )
 
         # print(json.dumps(docs, indent=2))
         pg_upserter(docs, body.asset)
 
-    except Exception as e:
-        print(e)
+    except Exception as error:
+        logger.exception(error)

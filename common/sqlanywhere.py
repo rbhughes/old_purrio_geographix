@@ -2,10 +2,13 @@ import pyodbc
 import os
 import re
 from retry import retry
+from common.logger import Logger
 from common.util import normalize_path, RetryException
 from common.typeish import SQLAnywhereConn
 
 from typing import List, Dict, Any
+
+logger = Logger(__name__)
 
 # TODO: make this context aware, use "with..."
 
@@ -70,11 +73,11 @@ def db_exec(
             return multi
     except pyodbc.OperationalError as oe:
         if re.search(r"Database name not unique", str(oe)):
-            print(oe)
+            logger.exception(oe)
             conn.pop("dbf")
             raise RetryException from oe
     except Exception as ex:
-        print(ex)
+        logger.exception(ex)
         raise ex
 
     finally:

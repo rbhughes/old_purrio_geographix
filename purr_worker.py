@@ -34,8 +34,6 @@ class PurrWorker:
         self.task_manager = TaskManager(self.sb_client)
         self.messenger = Messenger(self.sb_client)
 
-        # print(self.supabase.user_id())
-
         work_max_workers = int(os.environ.get("WORK_MAX_WORKERS"))
         self.work_queue = QueueManager(work_max_workers)
         self.work_queue_thread = threading.Thread(
@@ -53,6 +51,8 @@ class PurrWorker:
         )
         self.socket = init_socket()
         self.running = True
+
+        logger.info("PurrWorker initialized...")
 
     def start_queue_processing(self):
         self.work_queue.process_queue(self.task_handler)
@@ -148,7 +148,7 @@ class PurrWorker:
         logger.send_message(
             directive="note",
             repo_id=repo.id,
-            data={"note": f"batcher tasks: {len(tasks)}: " + repo.fs_path},
+            data={"note": f"set {len(tasks)} batcher tasks @ {repo.fs_path}"},
             workflow="load",
         )
 
@@ -219,7 +219,7 @@ class PurrWorker:
             logger.send_message(
                 directive="note",
                 repo_id=repo["id"],
-                data={"note": "added repo: " + repo["fs_path"]},
+                data={"note": f"added repo: {repo["fs_path"]}"},
                 workflow="recon",
             )
 
@@ -251,9 +251,6 @@ class PurrWorker:
     # @auto_log
     def task_handler(self, task):
 
-        # logger.send_message(directive="busy", data=json.dumps({"task_id": task.id}))
-        # logger.send_message(directive="busy", data={"task_id": task.id})
-
         task_handlers = {
             "batcher": self.handle_batcher,
             "loader": self.handle_loader,
@@ -281,8 +278,6 @@ class PurrWorker:
         else:
             print(f"Unknown task directive: {task.directive}")
 
-        # self.sign_out()
-
     def listen(self) -> None:
         self.socket.connect()
         channel = self.socket.set_channel("realtime:public:task")
@@ -301,7 +296,3 @@ class PurrWorker:
         channel.join().on("UPDATE", pluck)
 
         self.socket.listen()
-
-    # @staticmethod
-    # def say(x="nobody"):
-    #     print("Hello World! ", x)

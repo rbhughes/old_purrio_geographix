@@ -3,6 +3,10 @@ from supabase import create_client
 
 
 class SupabaseClient:
+    """
+    A simplified proxy for the real supabase client
+    """
+
     def __init__(self):
         sb_url: str = os.environ.get("SUPABASE_URL")
         sb_key: str = os.environ.get("SUPABASE_KEY")

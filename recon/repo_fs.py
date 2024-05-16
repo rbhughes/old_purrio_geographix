@@ -42,7 +42,7 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[dict]:
     """
     logger.send_message(
         directive="note",
-        data={"note": "recursive glob search: " + recon_root},
+        data={"note": f"recursive glob search: {recon_root}"},
         workflow="recon",
     )
     repo_list = []
@@ -76,7 +76,7 @@ def dir_stats(repo_base) -> dict:
     logger.send_message(
         directive="note",
         repo_id=repo_base["id"],
-        data={"note": "collecting dir stats: " + repo_base["fs_path"]},
+        data={"note": f"collecting dir stats @ {repo_base["fs_path"]}"},
         workflow="recon",
     )
 
@@ -112,7 +112,7 @@ def repo_mod(repo_base) -> dict:
     logger.send_message(
         directive="note",
         repo_id=repo_base["id"],
-        data={"note": "calculating repo mod: " + repo_base["fs_path"]},
+        data={"note": f"calculating repo mod @ {repo_base["fs_path"]}"},
         workflow="recon",
     )
 

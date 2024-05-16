@@ -56,7 +56,7 @@ def batcher(body, dna, repo) -> List[dict]:
     logger.send_message(
         directive="note",
         repo_id=repo.id,
-        data={"note": f"define batcher tasks: {body.asset}: " + repo.fs_path},
+        data={"note": f"define batcher tasks: {body.asset} @ {repo.fs_path}"},
         workflow="load",
     )
 

@@ -30,6 +30,4 @@ class Messenger:
         try:
             self.sb_client.table("message").insert(msg.to_dict()).execute()
         except Exception as e:
-            print("!!!!!!!!!!!!!!!!!!!!!!")
             print(e)
-            print("!!!!!!!!!!!!!!!!!!!!!!")

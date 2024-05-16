@@ -1,7 +1,10 @@
 import re
 from retry import retry
+from common.logger import Logger
 from common.util import RetryException
 from typing import Optional
+
+logger = Logger(__name__)
 
 
 class TaskManager:
@@ -31,7 +34,7 @@ class TaskManager:
                 )
         except Exception as err:
             if re.search("JWT expired", str(err)):
-                print("Session JWT expired. Retrying after sign-in...")
+                logger.warning("Session JWT expired. Retrying after sign-in...")
                 self.sb_client.sign_in()
                 raise RetryException from err
             else:

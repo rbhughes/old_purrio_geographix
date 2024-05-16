@@ -76,7 +76,7 @@ def well_counts(repo_base) -> dict:
     logger.send_message(
         directive="note",
         repo_id=repo_base["id"],
-        data={"note": "collecting well counts: " + repo_base["fs_path"]},
+        data={"note": f"collecting well counts @ {repo_base["fs_path"]}"},
         workflow="recon",
     )
 
@@ -115,7 +115,7 @@ def hull_outline(repo_base) -> dict:
     logger.send_message(
         directive="note",
         repo_id=repo_base["id"],
-        data={"note": "building hull outline: " + repo_base["fs_path"]},
+        data={"note": f"building hull outline @ {repo_base["fs_path"]}"},
         workflow="recon",
     )
 

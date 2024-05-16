@@ -1,5 +1,3 @@
-import threading
-
 from purr_worker import PurrWorker
 
 

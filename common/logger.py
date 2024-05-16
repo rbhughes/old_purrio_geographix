@@ -4,7 +4,6 @@ import sys
 import simplejson as json
 from common.messenger import Messenger
 from common.sb_client import SupabaseClient
-from common.util import is_valid_json
 from dotenv import load_dotenv
 
 # CRITICAL
