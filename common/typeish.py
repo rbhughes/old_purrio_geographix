@@ -1,3 +1,4 @@
+import re
 from common.util import hostname
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
@@ -209,6 +210,32 @@ class SearchTask:
         return task_dict
 
 
+# EXPORT ######################################################################
+@dataclass
+class ExportTaskBody:
+    asset: str
+    sql: str
+    total_hits: int
+    user_id: str
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class ExportTask:
+    body: ExportTaskBody
+    directive: str
+    id: int
+    status: str
+    worker: str
+
+    def to_dict(self):
+        task_dict = asdict(self)
+        task_dict["body"] = self.body.to_dict()
+        return task_dict
+
+
 # #############################################################################
 
 
@@ -296,6 +323,10 @@ def validate_task(payload: dict):
                         "suites" in payload["record"]["body"]
                         and "geographix" in payload["record"]["body"]["suites"]
                     )
+                    or (
+                        "sql" in payload["record"]["body"]
+                        and re.search("geographix", payload["record"]["body"]["sql"])
+                    )
                 )
             ):
                 task = payload["record"]
@@ -338,6 +369,17 @@ def validate_task(payload: dict):
                         worker=task["worker"],
                     )
 
+                if task.get("directive") == "export":
+                    return ExportTask(
+                        body=ExportTaskBody(**task["body"]),
+                        directive=task["directive"],
+                        id=task["id"],
+                        status=task["status"],
+                        worker=task["worker"],
+                    )
+
     except KeyError as ke:
         print(ke)
         return None
+    except Exception as e:
+        print(e)

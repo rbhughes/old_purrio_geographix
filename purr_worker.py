@@ -247,6 +247,13 @@ class PurrWorker:
         logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
+    def handle_export(self, task):
+        logger.send_message(directive="busy", data={"job_id": task.id})
+        print("SHOULD BE HANDLING EXPORT NOW")
+        print(task)
+        logger.send_message(directive="done", data={"job_id": task.id})
+
+    ###########################################################################
 
     # @auto_log
     def task_handler(self, task):
@@ -256,6 +263,7 @@ class PurrWorker:
             "loader": self.handle_loader,
             "recon": self.handle_recon,
             "search": self.handle_search,
+            "export": self.handle_export,
             # "stats": self.handle_stats,
             # "halt": self.halt,
         }
@@ -275,8 +283,9 @@ class PurrWorker:
             finally:
                 # probably needless cleanup
                 self.task_manager.manage_task(task.id)
-        else:
-            print(f"Unknown task directive: {task.directive}")
+        #
+        # else:
+        #     print(f"Unknown task directive: {task.directive}")
 
     def listen(self) -> None:
         self.socket.connect()
@@ -287,7 +296,7 @@ class PurrWorker:
 
             if task:
                 logger.debug(f"plucked {task.directive} task from queue")
-                if task.directive == "search":
+                if task.directive == "search" or task.directive == "export":
                     self.add_to_search_queue(task)
                 else:
                     self.add_to_work_queue(task)
