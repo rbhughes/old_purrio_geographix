@@ -15,13 +15,26 @@ from common.task_manager import TaskManager
 from common.typeish import validate_task, validate_repo, Repo
 from common.util import init_socket
 from recon.recon import repo_recon
-from search.search import search_local_pg
+from search.search import search_local_pg, query_to_file
 from common.logger import Logger
 
 from typing import Any, Callable, Dict, List
 
 load_dotenv()
 logger = Logger(__name__)
+
+
+def handle_export(task):
+    """
+
+    :param task: ExportTaskBody
+    :return: None
+    """
+    logger.send_message(directive="busy", data={"job_id": task.id})
+    query_to_file(task.body)
+    logger.send_message(directive="done", data={"job_id": task.id})
+
+    return True
 
 
 class PurrWorker:
@@ -176,17 +189,14 @@ class PurrWorker:
         # 2. run this loader task (select from source, write to pg)
         loader(task.body, repo)
 
-        # 3. remove task from task table
-        self.task_manager.manage_task(task.id)
-
-        # 4. remove batch/task combo from batch_ledger
+        # 3. remove batch/task combo from batch_ledger
         self.task_manager.manage_asset_batch(task.id, task.body.batch_id)
 
-        # 5. check if the whole batch is done
+        # 4. check if the whole batch is done
         done = self.task_manager.is_batch_finished(task.body.batch_id)
 
         if done:
-            # 6. notify client of job/task end
+            # 5. notify client of job/task end
             logger.send_message(directive="done", data={"job_id": task.body.batch_id})
 
             return True
@@ -212,9 +222,7 @@ class PurrWorker:
         # 2. write repos to repo table
         self.sb_client.table("repo").upsert(repos).execute()
 
-        # 3. remove this task
-        self.task_manager.manage_task(task.id)
-
+        # 3. send message
         for repo in repos:
             logger.send_message(
                 directive="note",
@@ -247,11 +255,6 @@ class PurrWorker:
         logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
-    def handle_export(self, task):
-        logger.send_message(directive="busy", data={"job_id": task.id})
-        print("SHOULD BE HANDLING EXPORT NOW")
-        print(task)
-        logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
 
@@ -263,7 +266,7 @@ class PurrWorker:
             "loader": self.handle_loader,
             "recon": self.handle_recon,
             "search": self.handle_search,
-            "export": self.handle_export,
+            "export": handle_export,
             # "stats": self.handle_stats,
             # "halt": self.halt,
         }

@@ -1,16 +1,21 @@
 import csv
 import json
+import os
+
 import psycopg2
 import psycopg2.extras
 import re
 
+from datetime import datetime
+from dotenv import load_dotenv
 from psycopg2 import sql
 from common.logger import Logger
-from common.typeish import SearchTaskBody
+from common.typeish import SearchTaskBody, ExportTaskBody
 from common.util import local_pg_params
 from contextlib import closing
 from typing import List, Dict
 
+load_dotenv()
 logger = Logger(__name__)
 
 
@@ -74,7 +79,8 @@ def make_asset_fts_queries(body: SearchTaskBody, conn: psycopg2.extensions.conne
 
 
 def search_local_pg(supabase, body: SearchTaskBody) -> str:
-    conn: psycopg2.extensions.connection = psycopg2.connect(**local_pg_params())
+    params = local_pg_params()
+    conn: psycopg2.extensions.connection = psycopg2.connect(**params)
 
     fts_queries: List[Dict[str, str]] = make_asset_fts_queries(body, conn)
 
@@ -164,77 +170,111 @@ def search_local_pg(supabase, body: SearchTaskBody) -> str:
     return "maybe donezo"
 
 
-def query_to_file(query, out_file, conn_params, file_format="csv"):
+def get_output_file(task):
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    file_extension = ".csv" if task.file_format == "csv" else ".json"
+    output_file = f"{task.asset}_{timestamp}_{task.user_id}{file_extension}"
+    return output_file
+
+
+def query_to_file(task: ExportTaskBody):
     """
     Execute a SQL query and write the results to a CSV file.
 
     Args:
-        query (str): The SQL query to execute.
-        out_file (str): The path to the output CSV file.
-        conn_params (dict): A dictionary containing the connection parameters
-            for the PostgreSQL database.
-        file_format: csv or json
+        task: ExportTaskBody
 
     Returns:
         None
     """
     batch_size = 1000
+    output_file = get_output_file(task)
+    output_path = os.path.join(os.environ.get("EXPORT_DIR"), output_file)
 
     try:
-        with closing(psycopg2.connect(**conn_params)) as conn:
+        params = local_pg_params()
+        with closing(psycopg2.connect(**params)) as conn:
             with closing(conn.cursor(cursor_factory=psycopg2.extras.DictCursor)) as cur:
-                cur.execute(query)
+                cur.execute(task.sql)
 
                 first_row = cur.fetchone()
                 if not first_row:
                     print("No data returned from query.")
                     return
 
-                # Because we select more than just doc
+                # Because we may select more than just doc
                 colnames = [desc[0] for desc in cur.description]
                 doc_index = colnames.index("doc")
 
-                json_keys = list(first_row[doc_index].keys())
-                headers = json_keys
+                if task.file_format == "csv":
+                    # rows = []
 
-                if file_format == "csv":
-                    with open(out_file, mode="w", newline="") as csvfile:
+                    first_doc = first_row[doc_index]
+
+                    header_keys = []
+                    for key1, value1 in first_doc.items():
+                        if isinstance(value1, dict):
+                            for key2 in value1.keys():
+                                header_keys.append(f"{key1}__{key2}")
+                        else:
+                            header_keys.append(key1)
+
+                    with open(output_path, mode="w", newline="") as csvfile:
                         csv_writer = csv.writer(csvfile)
 
-                        # Write the headers to the CSV file
-                        csv_writer.writerow(headers)
+                        csv_writer.writerow(header_keys)
 
-                        # Write the first row to the CSV file
-                        json_data = first_row[doc_index]  # JSONB column data
-                        csv_row = (
-                            [json_data.get(key) for key in json_keys]
-                            if json_data
-                            else [None] * len(json_keys)
-                        )
-                        csv_writer.writerow(csv_row)
-
-                        # Fetch and write in batches
                         while True:
                             rows = cur.fetchmany(size=batch_size)
                             if not rows:
                                 break
                             for row in rows:
-                                json_data = row[doc_index]
-                                csv_row = (
-                                    [json_data.get(key) for key in json_keys]
-                                    if json_data
-                                    else [None] * len(json_keys)
-                                )
+                                csv_row = []
+                                doc = row[doc_index]
+                                print("--------------")
+                                for key in header_keys:
+                                    key_parts = key.split("__")
+                                    value = doc
+                                    for part in key_parts:
+                                        if part in value:
+                                            value = value[part]
+                                            if isinstance(value, list):
+                                                value = json.dumps(value)
+                                        else:
+                                            value = ""
+                                    csv_row.append(value)
                                 csv_writer.writerow(csv_row)
 
-                elif file_format == "json":
+                        #
+                        # # Write the first row to the CSV file
+                        # csv_row = (
+                        #     [json_data.get(key) for key in json_keys]
+                        #     if json_data
+                        #     else [None] * len(json_keys)
+                        # )
+                        # csv_writer.writerow(csv_row)
+                        #
+                        # # Fetch and write in batches
+
+                        ###
+                        # while True:
+                        #     rows = cur.fetchmany(size=batch_size)
+                        #     if not rows:
+                        #         break
+                        #     for row in rows:
+                        #         json_data = row[doc_index]
+
+                        ###
+                        #         csv_row = (
+                        #             [json_data.get(key) for key in json_keys]
+                        #             if json_data
+                        #             else [None] * len(json_keys)
+                        #         )
+                        #         csv_writer.writerow(csv_row)
+
+                elif task.file_format == "json":
                     data = []
 
-                    # Add the first row to the data list
-                    json_data = first_row[doc_index]  # JSONB column data
-                    data.append(json_data if json_data else {})
-
-                    # Fetch and add rows in batches
                     while True:
                         rows = cur.fetchmany(size=batch_size)
                         if not rows:
@@ -243,11 +283,10 @@ def query_to_file(query, out_file, conn_params, file_format="csv"):
                             json_data = row[doc_index]
                             data.append(json_data if json_data else {})
 
-                    # Write the JSON data to the output file
-                    with open(out_file, mode="w") as jsonfile:
+                    with open(output_path, mode="w") as jsonfile:
                         json.dump(data, jsonfile, indent=4)
 
-        print(f"Data successfully written to {out_file}")
+        print(f"Data successfully written to {output_path}")
 
     except Exception as e:
         import traceback

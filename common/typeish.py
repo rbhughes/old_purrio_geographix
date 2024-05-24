@@ -214,6 +214,7 @@ class SearchTask:
 @dataclass
 class ExportTaskBody:
     asset: str
+    file_format: str
     sql: str
     total_hits: int
     user_id: str
