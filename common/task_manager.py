@@ -34,6 +34,7 @@ class TaskManager:
                 )
         except Exception as err:
             if re.search("JWT expired", str(err)):
+                print(err)
                 logger.warning("Session JWT expired. Retrying after sign-in...")
                 self.sb_client.sign_in()
                 raise RetryException from err

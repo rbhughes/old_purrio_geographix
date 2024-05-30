@@ -13,7 +13,7 @@ from common.messenger import Messenger
 from common.queue_manager import QueueManager
 from common.task_manager import TaskManager
 from common.typeish import validate_task, validate_repo, Repo
-from common.util import init_socket
+from common.util import init_socket, hostname
 from recon.recon import repo_recon
 from search.search import search_local_pg, query_to_file
 from common.logger import Logger
@@ -66,6 +66,19 @@ class PurrWorker:
         self.running = True
 
         logger.info("PurrWorker initialized...")
+
+    def register_worker(self):
+        data = (
+            self.sb_client.table("worker")
+            .upsert({"hostname": hostname(), "suite": "geographix"})
+            .execute()
+        )
+        if data:
+            logger.send_message(
+                directive="note",
+                data={"note": f"registered geographix worker: {hostname()}"},
+                workflow="any",
+            )
 
     def start_queue_processing(self):
         self.work_queue.process_queue(self.task_handler)

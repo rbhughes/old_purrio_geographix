@@ -1,3 +1,5 @@
+python -m client
+
 add venv to vscode: shift + ctrl + p (type python)
 
 # initialize python in terminal
