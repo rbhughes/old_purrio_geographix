@@ -13,7 +13,7 @@ from common.messenger import Messenger
 from common.queue_manager import QueueManager
 from common.task_manager import TaskManager
 from common.typeish import validate_task, validate_repo, Repo
-from common.util import init_socket, hostname
+from common.util import init_socket, hostname, SUITE
 from recon.recon import repo_recon
 from search.search import search_local_pg, query_to_file
 from common.logger import Logger
@@ -65,18 +65,18 @@ class PurrWorker:
         self.socket = init_socket()
         self.running = True
 
-        logger.info("PurrWorker initialized...")
+        logger.info(f"PurrWorker ({SUITE}) initialized...")
 
     def register_worker(self):
         data = (
             self.sb_client.table("worker")
-            .upsert({"hostname": hostname(), "suite": "geographix"})
+            .upsert({"hostname": hostname(), "suite": SUITE})
             .execute()
         )
         if data:
             logger.send_message(
                 directive="note",
-                data={"note": f"registered geographix worker: {hostname()}"},
+                data={"note": f"registered {SUITE} worker: {hostname()}"},
                 workflow="any",
             )
 
@@ -268,7 +268,6 @@ class PurrWorker:
         logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
-
     ###########################################################################
 
     # @auto_log

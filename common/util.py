@@ -10,6 +10,9 @@ from realtime.connection import Socket
 from typing import Callable
 
 
+SUITE = "geographix"
+
+
 def timer(func) -> Callable:
     """
     A wrapped timer that simply prints start/end elapsed execution time. Ex:

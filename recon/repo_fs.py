@@ -3,7 +3,7 @@ import os
 import re
 from datetime import datetime
 from subprocess import run
-from common.util import normalize_path, hostname, hashify
+from common.util import normalize_path, hostname, hashify, SUITE
 from common.sqlanywhere import make_conn_params
 from common.logger import Logger
 from typing import List
@@ -57,7 +57,7 @@ def glob_repos(recon_root: str, ggx_host=f"{hostname().upper()}") -> List[dict]:
                     "fs_path": normalize_path(maybe),
                     "conn": make_conn_params(maybe, ggx_host),
                     "conn_aux": {"ggx_host": ggx_host},
-                    "suite": "geographix",
+                    "suite": SUITE,
                 }
             )
         else:

@@ -1,5 +1,5 @@
 import re
-from common.util import hostname
+from common.util import hostname, SUITE
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional
 
@@ -318,15 +318,15 @@ def validate_task(payload: dict):
                 and (
                     (
                         "suite" in payload["record"]["body"]
-                        and payload["record"]["body"]["suite"] == "geographix"
+                        and payload["record"]["body"]["suite"] == SUITE
                     )
                     or (
                         "suites" in payload["record"]["body"]
-                        and "geographix" in payload["record"]["body"]["suites"]
+                        and SUITE in payload["record"]["body"]["suites"]
                     )
                     or (
                         "sql" in payload["record"]["body"]
-                        and re.search("geographix", payload["record"]["body"]["sql"])
+                        and re.search(SUITE, payload["record"]["body"]["sql"])
                     )
                 )
             ):
