@@ -90,7 +90,7 @@ def batcher(body, dna, repo) -> List[dict]:
     asset_count: int = res[0].get("count")
 
     # get batches
-    chunk = body.chunk
+    chunk = body.chunk or dna.get("default_chunk")
     selectors = batch_selector((asset_count, chunk, select, order, where))
 
     tasks = []

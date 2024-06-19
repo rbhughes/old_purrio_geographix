@@ -34,9 +34,10 @@ def make_asset_fts_queries(body: SearchTaskBody, conn: psycopg2.extensions.conne
             table=sql.Identifier(asset),
         )
 
-        query += sql.SQL(" a.suite IN ({})").format(
-            sql.SQL(",").join(map(sql.Literal, body.suites))
-        )
+        # query += sql.SQL(" a.suite IN ({})").format(
+        #     sql.SQL(",").join(map(sql.Literal, body.suites))
+        # )
+        query += sql.SQL(" a.suite in ('geographix')")
 
         # screen out blanks; wildcard chars treated literally here
         is_valid_tag = (

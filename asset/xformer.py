@@ -42,20 +42,13 @@ def xformer(xform_args):
     ##################################################
 
     if func_name == "blob_to_hex":
-        # try:
-        #     return row[col].hex()
-        # except (AttributeError, TypeError):
-        #     print("ERROR")
-        #     return None
         return row[col].hex()
 
     if func_name == "delimited_array_with_nulls":
-
         values = row[col].split(purr_delimiter)
         return [ensure_type(data_type, v) if v != purr_null else None for v in values]
 
     if func_name == "decode_depth_registration":
-
         reg_points = []
         buf = bytearray(row[col])
         for i in range(12, len(buf), 28):
@@ -67,7 +60,6 @@ def xformer(xform_args):
         return reg_points
 
     if func_name == "decode_curve_values":
-
         curve_vals = []
         buf = bytearray(row[col])
         for i in range(2, len(buf), 4):
@@ -75,12 +67,9 @@ def xformer(xform_args):
             cval = struct.unpack("<f", cval_bytes)[0]
             curve_vals.append(cval)
         return curve_vals
-
     else:
-
         if data_type not in ("object", "string", "number", "date"):
             print("--------NEED TO ADD XFORM-------->", data_type)
-
         return ensure_type(data_type, row[col])
 
 

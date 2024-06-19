@@ -5,7 +5,7 @@ from concave_hull import concave_hull
 # from common.debugger import debugger
 
 NOTNULL_LONLAT = (
-    "SELECT surface_longitude, surface_latitude FROM well "
+    "SELECT surface_longitude AS lon, surface_latitude AS lat FROM well "
     "WHERE surface_longitude IS NOT NULL and surface_latitude IS NOT NULL"
 )
 
@@ -120,7 +120,7 @@ def hull_outline(repo_base) -> dict:
     )
 
     res = db_exec(repo_base["conn"], NOTNULL_LONLAT)
-    points = [[r["surface_longitude"], r["surface_latitude"]] for r in res]
+    points = [[r["lon"], r["lat"]] for r in res]
 
     if len(points) < 3:
         print(f"Too few valid Lon/Lat points for polygon: {repo_base["name"]}")

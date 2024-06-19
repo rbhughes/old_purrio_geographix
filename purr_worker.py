@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from asset.batcher import batcher
 from asset.loader import loader
 
-# from common.auto_log import setup_logging, auto_log
 from common.sb_client import SupabaseClient
 from common.messenger import Messenger
 from common.queue_manager import QueueManager
@@ -262,9 +261,10 @@ class PurrWorker:
         # 0. notify client of job/task start
         logger.send_message(directive="busy", data={"job_id": task.id})
 
+        # 1. fts on local pg
         search_local_pg(self.sb_client, task.body)
 
-        # 4. notify client of job/task end
+        # 2. notify client of job/task end
         logger.send_message(directive="done", data={"job_id": task.id})
 
     ###########################################################################
