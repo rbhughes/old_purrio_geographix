@@ -122,6 +122,10 @@ def hull_outline(repo_base) -> dict:
     res = db_exec(repo_base["conn"], NOTNULL_LONLAT)
     points = [[r["lon"], r["lat"]] for r in res]
 
+    print("..............")
+    print(points)
+    print("..............")
+
     if len(points) < 3:
         print(f"Too few valid Lon/Lat points for polygon: {repo_base["name"]}")
         return {"outline": None}
